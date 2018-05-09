@@ -96,14 +96,12 @@ export async function updateExchanges(exchanges: DB_Exchange[]) {
   client.close();
 }
 
-export async function updateAssetSymbols(symbols: DB_Symbol[]) {
+export async function insertAssetSymbols(symbols: DB_Symbol[]) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("symbols");
   await Promise.all(
-    symbols.map(symbol =>
-      promisify(coll, "update", { id: symbol.id }, symbol, { upsert: true })
-    )
+    symbols.map(symbol => promisify(coll, "insert", symbol).catch(() => null))
   );
   client.close();
 }
