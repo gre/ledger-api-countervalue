@@ -1,0 +1,15 @@
+{
+  "parser": "babel-eslint",
+  "extends": ["eslint:recommended", "plugin:flowtype/recommended", "prettier"],
+  "plugins": ["flowtype"],
+  "env": {
+    "es6": true,
+    "node": true
+  },
+  "rules": {
+    "indent": ["error", 2],
+    "linebreak-style": ["error", "unix"],
+    "quotes": ["error", "double"],
+    "semi": ["error", "always"],
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "plugins": [
+    ["transform-object-rest-spread", { "useBuiltIns": true }],
+
+    "transform-flow-strip-types"
+  ],
+  "presets": [
+    [
+      "babel-preset-env",
+      {
+        "targets": {
+          "node": "8"
+        }
+      }
+    ]
+  ]
+}
