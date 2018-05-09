@@ -21,7 +21,7 @@ import {
   querySymbolById,
   updateSymbolStats,
   updateExchanges,
-  updateAssetSymbols,
+  insertAssetSymbols,
   updateLiveRates
 } from "./db";
 import {
@@ -63,7 +63,7 @@ const fetchAndCacheAvailableSpotSymbols = promiseThrottle(async () => {
     historyLoadedAtDay: null,
     histodays: {}
   }));
-  await updateAssetSymbols(symbols);
+  await insertAssetSymbols(symbols);
   return symbols;
 }, throttles.fetchSymbols);
 
