@@ -1,5 +1,47 @@
 // @flow
 
+import type { Observable } from "rxjs";
+
+// Generic types
+
+export type Histodays = {
+  [day: string]: number
+};
+
+export type Pair = {|
+  from: string,
+  to: string
+|};
+
+export type PairExchange = {|
+  id: string, // EXCHANGE_FROM_TO format
+  exchange: string,
+  from: string,
+  to: string
+|};
+
+export type PriceUpdate = {|
+  pairExchangeId: string,
+  price: number
+|};
+
+export type Exchange = {|
+  id: string,
+  name: string,
+  website: ?string
+|};
+
+export type TimeseriesOHLCVR = {|
+  time: Date,
+  open: number,
+  high: number,
+  low: number,
+  close: number,
+  volume: number
+|};
+
+// API types
+
 export type RequestPair = {|
   from: string,
   to: string,
@@ -24,35 +66,76 @@ export type DailyAPIResponse = {
   }
 };
 
-export type Histodays = {
-  [day: string]: number
-};
-
-export type Pair = {|
-  from: string,
-  to: string
-|};
-
 export type ExchangesAPIRequest = {|
   pair: Pair
 |};
 
-export type ExchangesAPIResponse = Array<{|
-  id: string,
-  name: string,
-  website: ?string
-|}>;
+export type ExchangesAPIResponse = Array<Exchange>;
 
+// Provider types
+
+export type Provider = {
+  init: () => void,
+  fetchHistodaysSeries: (
+    pairExchangeId: string,
+    limit?: number
+  ) => Promise<TimeseriesOHLCVR[]>,
+  fetchExchanges: () => Promise<Exchange[]>,
+  fetchAvailablePairExchanges: () => Promise<PairExchange[]>,
+  subscribePriceUpdate: (
+    pairExchanges: PairExchange[]
+  ) => Observable<PriceUpdate>
+};
 // Database types
+
+export type Database = {
+  init: () => Promise<void>,
+
+  statusDB: () => Promise<void>,
+
+  updateLiveRates: (PriceUpdate[]) => Promise<void>,
+
+  updateHistodays: (
+    pairExchangeId: string,
+    histodays: Histodays
+  ) => Promise<void>,
+
+  updateExchanges: (DB_Exchange[]) => Promise<void>,
+
+  insertPairExchangeData: (DB_PairExchangeData[]) => Promise<void>,
+
+  updatePairExchangeStats: (
+    pairExchangeId: string,
+    stats: {
+      yesterdayVolume?: number,
+      hasHistoryFor30LastDays?: boolean,
+      historyLoadedAtDay?: string,
+      latestDate?: Date
+    }
+  ) => Promise<void>,
+
+  queryExchanges: () => Promise<DB_Exchange[]>,
+
+  queryPairExchangesByPairs: (pairs: Pair[]) => Promise<DB_PairExchangeData[]>,
+
+  queryPairExchangesByPair: (
+    pair: Pair,
+    opts?: { filterWithHistory?: boolean }
+  ) => Promise<DB_PairExchangeData>,
+
+  queryPairExchangeById: (
+    pairExchangeId: string
+  ) => Promise<DB_PairExchangeData>
+};
 
 export type DB_Exchange = {|
   id: string,
-  website: string,
-  name: string
+  name: string,
+  website: ?string
 |};
 
-export type DB_Symbol = {|
-  id: string, // id of the symbol (coinapi format)
+export type DB_PairExchangeData = {|
+  id: string,
   from: string, // e.g BTC
   to: string, // e.g. USD
   from_to: string,
@@ -65,55 +148,4 @@ export type DB_Symbol = {|
   yesterdayVolume: number, // the volume that was traded yesterday
   hasHistoryFor30LastDays: boolean, // track if the histodays are available for the last 30 days
   historyLoadedAtDay: ?string // YYYY-MM-DD date where the histodays was loaded
-|};
-
-// Coin API types
-
-export type CoinAPI_TickerMessage = {|
-  time_exchange: string,
-  time_coinapi: string,
-  uuid: string,
-  price: number,
-  size: number,
-  taker_side: "SELL" | "BUY",
-  symbol_id: string,
-  sequence: number,
-  type: string
-|};
-
-export type CoinAPI_Symbol = {|
-  symbol_id: string,
-  exchange_id: string,
-  symbol_type: string,
-  asset_id_base: string,
-  asset_id_quote: string
-|};
-
-export type CoinAPI_Exchange = {|
-  exchange_id: string,
-  website: string,
-  name: string,
-  data_start: string,
-  data_end: string,
-  data_quote_start: string,
-  data_quote_end: string,
-  data_orderbook_start: string,
-  data_orderbook_end: string,
-  data_trade_start: string,
-  data_trade_end: string,
-  data_trade_count: number,
-  data_symbols_count: number
-|};
-
-export type CoinAPI_Timeseries = {|
-  time_period_start: string,
-  time_period_end: string,
-  time_open: string,
-  time_close: string,
-  price_open: number,
-  price_high: number,
-  price_low: number,
-  price_close: number,
-  volume_traded: number,
-  trades_count: number
 |};

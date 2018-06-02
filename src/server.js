@@ -14,7 +14,7 @@ import type {
   ExchangesAPIResponse
 } from "./types";
 import { logEndpointError, logEndpointCall } from "./logger";
-import { init, statusDB } from "./db";
+import { getCurrentDatabase } from "./db";
 import { supportTicker } from "./utils";
 
 function endpoint<In, Out>(validateInput: mixed => In, f: In => Promise<Out>) {
@@ -102,15 +102,17 @@ app.post(
 );
 
 app.get("/status", (req: *, res: *) => {
-  statusDB().then(
-    () => {
-      res.status(200).send();
-    },
-    error => {
-      logEndpointError(req, error);
-      res.status(500).send();
-    }
-  );
+  getCurrentDatabase()
+    .statusDB()
+    .then(
+      () => {
+        res.status(200).send();
+      },
+      error => {
+        logEndpointError(req, error);
+        res.status(500).send();
+      }
+    );
 });
 
 app.get(
@@ -140,10 +142,12 @@ app.get(
   )
 );
 
-init().then(() => {
-  console.log("DB initialized."); // eslint-disable-line no-console
-  const port = process.env.PORT || 8088;
-  app.listen(port, () => {
-    console.log(`Server running on ${port}`); // eslint-disable-line no-console
+getCurrentDatabase()
+  .init()
+  .then(() => {
+    console.log("DB initialized."); // eslint-disable-line no-console
+    const port = process.env.PORT || 8088;
+    app.listen(port, () => {
+      console.log(`Server running on ${port}`); // eslint-disable-line no-console
+    });
   });
-});

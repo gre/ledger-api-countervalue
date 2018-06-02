@@ -1,7 +1,8 @@
 // @flow
 /* eslint-disable no-console */
 
-import type { CoinAPI_TickerMessage } from "./types";
+import type { PriceUpdate } from "./types";
+import querystring from "querystring";
 
 const conciseHttpError = error => {
   if (
@@ -14,18 +15,31 @@ const conciseHttpError = error => {
   return String((error && error.message) || error);
 };
 
-export const logAPI = ({ url, duration, status }: *) => {
+export const logAPI = ({ api, url, duration, opts, status }: *) => {
+  const queryString =
+    opts && opts.params ? querystring.stringify(opts.params) : "";
   console.log(
-    "API call: HTTP " + status + " (" + duration.toFixed(0) + "ms) <= " + url
-  );
-};
-
-export const logAPIError = ({ url, duration, error }: *) => {
-  console.log(
-    "API call: ERROR (" +
+    api +
+      " call: HTTP " +
+      status +
+      " (" +
       duration.toFixed(0) +
       "ms) <= " +
       url +
+      (queryString ? "?" + queryString : "")
+  );
+};
+
+export const logAPIError = ({ api, url, duration, opts, error }: *) => {
+  const queryString =
+    opts && opts.params ? querystring.stringify(opts.params) : "";
+  console.log(
+    api +
+      " call: ERROR (" +
+      duration.toFixed(0) +
+      "ms) <= " +
+      url +
+      (queryString ? "?" + queryString : "") +
       ": " +
       conciseHttpError(error)
   );
@@ -43,10 +57,13 @@ export const logEndpointError = (request: *, error: *) => {
   );
 };
 
-export const pullLiveRatesDebugMessage = (msg: CoinAPI_TickerMessage) =>
-  console.log(`${msg.taker_side} ${msg.symbol_id} ${msg.price}`, msg);
+export const pullLiveRatesDebugMessage = (msgs: PriceUpdate[]) =>
+  console.log(msgs.map(msg => `${msg.pairExchangeId} ${msg.price}`).join("\n"));
 
-export const pullLiveRatesError = (err: *) => console.error(err);
+export const pullLiveRatesError = (err: *) =>
+  console.error("pullLiveRatesError", err);
+
+export const pullLiveRatesEnd = () => console.warn("pullLiveRatesEnd");
 
 export const failRefreshingData = (err: *, id: string) =>
   console.error(`FAIL REFRESH ${id}: ${conciseHttpError(err)}`);

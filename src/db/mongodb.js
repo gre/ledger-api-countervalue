@@ -1,7 +1,7 @@
 // @flow
 
-import type { Pair, Histodays, DB_Symbol, DB_Exchange } from "./types";
-import { promisify } from "./utils";
+import type { Database } from "../types";
+import { promisify } from "../utils";
 
 const MongoClient = require("mongodb").MongoClient;
 
@@ -10,7 +10,7 @@ const url =
 
 const connect = () => promisify(MongoClient, "connect", url);
 
-export const init = async () => {
+const init = async () => {
   const client = await connect();
   const db = client.db();
   await promisify(
@@ -21,11 +21,11 @@ export const init = async () => {
     },
     { unique: true }
   );
-  await promisify(db.collection("symbols"), "createIndex", {
+  await promisify(db.collection("pairExchanges"), "createIndex", {
     from_to: 1
   });
   await promisify(
-    db.collection("symbols"),
+    db.collection("pairExchanges"),
     "createIndex",
     {
       id: 1
@@ -35,11 +35,11 @@ export const init = async () => {
   client.close();
 };
 
-export async function statusDB() {
+async function statusDB() {
   const client = await connect();
   const db = client.db();
   try {
-    const coll = db.collection("symbols");
+    const coll = db.collection("pairExchanges");
     const count = await promisify(coll, "count");
     if (count === 0) throw new Error("database is empty");
   } finally {
@@ -47,24 +47,19 @@ export async function statusDB() {
   }
 }
 
-export async function updateLiveRates(
-  all: Array<{
-    symbol: string,
-    rate: number
-  }>
-) {
+async function updateLiveRates(all) {
   const client = await connect();
   const db = client.db();
-  const coll = db.collection("symbols");
+  const coll = db.collection("pairExchanges");
   await Promise.all(
     all.map(item =>
       promisify(
         coll,
         "update",
-        { id: item.symbol },
+        { id: item.pairExchangeId },
         {
           $set: {
-            latest: item.rate,
+            latest: item.price,
             latestDate: new Date()
           }
         }
@@ -74,15 +69,15 @@ export async function updateLiveRates(
   client.close();
 }
 
-export async function updateHistodays(symbol: string, histodays: Histodays) {
+async function updateHistodays(id, histodays) {
   const client = await connect();
   const db = client.db();
-  const coll = db.collection("symbols");
-  await promisify(coll, "update", { id: symbol }, { $set: { histodays } });
+  const coll = db.collection("pairExchanges");
+  await promisify(coll, "update", { id }, { $set: { histodays } });
   client.close();
 }
 
-export async function updateExchanges(exchanges: DB_Exchange[]) {
+async function updateExchanges(exchanges) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("exchanges");
@@ -96,33 +91,28 @@ export async function updateExchanges(exchanges: DB_Exchange[]) {
   client.close();
 }
 
-export async function insertAssetSymbols(symbols: DB_Symbol[]) {
+async function insertPairExchangeData(pairExchanges) {
   const client = await connect();
   const db = client.db();
-  const coll = db.collection("symbols");
+  const coll = db.collection("pairExchanges");
   await Promise.all(
-    symbols.map(symbol => promisify(coll, "insert", symbol).catch(() => null))
+    pairExchanges.map(pairExchange =>
+      // we don't insert if it already exist to not override existing data.
+      promisify(coll, "insert", pairExchange).catch(() => null)
+    )
   );
   client.close();
 }
 
-export async function updateSymbolStats(
-  symbol: string,
-  stats: {
-    yesterdayVolume?: number,
-    hasHistoryFor30LastDays?: boolean,
-    historyLoadedAtDay?: string,
-    latestDate?: Date
-  }
-) {
+async function updatePairExchangeStats(id, stats) {
   const client = await connect();
   const db = client.db();
-  const coll = db.collection("symbols");
-  await promisify(coll, "update", { id: symbol }, { $set: stats });
+  const coll = db.collection("pairExchanges");
+  await promisify(coll, "update", { id }, { $set: stats });
   client.close();
 }
 
-export async function queryExchanges(): Promise<DB_Exchange[]> {
+async function queryExchanges() {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("exchanges");
@@ -131,17 +121,17 @@ export async function queryExchanges(): Promise<DB_Exchange[]> {
   return docs;
 }
 
-const querySymbolsSortCursor = cursor =>
+const queryPairExchangesSortCursor = cursor =>
   cursor.sort({
     yesterdayVolume: -1
   });
 
-export async function querySymbolsByPairs(pairs: Pair[]): Promise<DB_Symbol[]> {
+async function queryPairExchangesByPairs(pairs) {
   const client = await connect();
   const db = client.db();
-  const coll = db.collection("symbols");
+  const coll = db.collection("pairExchanges");
   const docs = await promisify(
-    querySymbolsSortCursor(
+    queryPairExchangesSortCursor(
       coll.find({
         from_to: {
           $in: pairs.map(p => p.from + "_" + p.to)
@@ -154,31 +144,44 @@ export async function querySymbolsByPairs(pairs: Pair[]): Promise<DB_Symbol[]> {
   return docs;
 }
 
-export async function querySymbolsByPair(
-  pair: Pair,
-  opts?: { filterWithHistory?: boolean } = {}
-): Promise<DB_Symbol> {
+async function queryPairExchangesByPair(pair, opts = {}) {
   const client = await connect();
   const db = client.db();
-  const coll = db.collection("symbols");
+  const coll = db.collection("pairExchanges");
   const { from, to } = pair;
   const query: Object = { from, to };
   if (opts.filterWithHistory) {
     query.hasHistoryFor30LastDays = true;
   }
   const docs = await promisify(
-    querySymbolsSortCursor(coll.find(query)),
+    queryPairExchangesSortCursor(coll.find(query)),
     "toArray"
   );
   client.close();
   return docs;
 }
 
-export const querySymbolById = async (symbol: string): Promise<DB_Symbol> => {
+const queryPairExchangeById = async id => {
   const client = await connect();
   const db = client.db();
-  const histodaysCol = db.collection("symbols");
-  const doc = await promisify(histodaysCol, "findOne", { id: symbol });
+  const histodaysCol = db.collection("pairExchanges");
+  const doc = await promisify(histodaysCol, "findOne", { id });
   client.close();
   return doc;
 };
+
+const database: Database = {
+  init,
+  statusDB,
+  updateLiveRates,
+  updateHistodays,
+  updateExchanges,
+  insertPairExchangeData,
+  updatePairExchangeStats,
+  queryExchanges,
+  queryPairExchangesByPairs,
+  queryPairExchangesByPair,
+  queryPairExchangeById
+};
+
+export default database;

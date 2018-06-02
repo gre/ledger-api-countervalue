@@ -1,21 +1,38 @@
 // @flow
 // Synchronize the local database with distant service
-import { init } from "./db";
-import { prefetchAllSymbols, pullLiveRates } from "./cache";
-import { pullLiveRatesDebugMessage, pullLiveRatesError } from "./logger";
+import { getCurrentDatabase } from "./db";
+import { prefetchAllPairExchanges, pullLiveRates } from "./cache";
+import { pullLiveRatesError, pullLiveRatesEnd } from "./logger";
 import { recurrentJob } from "./utils";
 
-init().then(() => {
-  pullLiveRates(
-    msg => {
-      if (process.env.DEBUG_LIVE_RATES) pullLiveRatesDebugMessage(msg);
-    },
-    error => {
-      pullLiveRatesError(error);
-      process.exit(1);
+const rebootTimeIfError = 60 * 1000;
+const rebootTimeIfComplete = 30 * 1000;
+const autoRebootHangTime = 10 * 1000;
+const autoRebootInterval = 4 * 60 * 60 * 1000;
+
+getCurrentDatabase()
+  .init()
+  .then(() => {
+    function pullLoop() {
+      const sub = pullLiveRates(
+        error => {
+          pullLiveRatesError(error);
+          setTimeout(pullLoop, rebootTimeIfError);
+        },
+        () => {
+          pullLiveRatesEnd();
+          setTimeout(pullLoop, rebootTimeIfComplete);
+        }
+      );
+      setTimeout(() => {
+        sub.unsubscribe();
+        setTimeout(pullLoop, autoRebootHangTime);
+      }, autoRebootInterval);
     }
-  );
-  if (!process.env.DISABLE_PREFETCH) {
-    recurrentJob(prefetchAllSymbols, 4 * 60 * 60 * 1000);
-  }
-});
+
+    pullLoop();
+
+    if (!process.env.DISABLE_PREFETCH) {
+      recurrentJob(prefetchAllPairExchanges, 4 * 60 * 60 * 1000);
+    }
+  });

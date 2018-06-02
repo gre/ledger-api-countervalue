@@ -1,5 +1,6 @@
 // @flow
 
+import type { PairExchange } from "./types";
 import {
   listCryptoCurrencies,
   listFiatCurrencies
@@ -63,15 +64,15 @@ export const convertToCentSatRate = (
   value: number
 ): number => value * 10 ** (lenseMagnitude(to) - lenseMagnitude(from));
 
-export const formatSymbol = (exchange: string, from: string, to: string) =>
-  `${exchange}_SPOT_${from}_${to}`;
+export const pairExchange = (
+  exchange: string,
+  from: string,
+  to: string
+): PairExchange => ({ id: `${exchange}_${from}_${to}`, exchange, from, to });
 
-export const parseSymbol = (
-  symbol: string
-): ?{ exchange: string, from: string, to: string } => {
-  const parts = symbol.split("_");
-  if (parts[1] !== "SPOT") return;
-  return { exchange: parts[0], from: parts[2], to: parts[3] };
+export const pairExchangeFromId = (id: string): PairExchange => {
+  const parts = id.split("_");
+  return { id, exchange: parts[0], from: parts[1], to: parts[2] };
 };
 
 const twoDigits = (n: number) => (n > 9 ? `${n}` : `0${n}`);
