@@ -142,6 +142,10 @@ app.get(
   )
 );
 
+if (process.env.HACK_SYNC_IN_SERVER) {
+  require("./sync");
+}
+
 getCurrentDatabase()
   .init()
   .then(() => {
