@@ -268,7 +268,15 @@ const delay = ms => new Promise(success => setTimeout(success, ms));
 export const prefetchAllPairExchanges = async () => {
   try {
     const pairExchanges = await fetchAndCacheAvailablePairExchanges();
-    for (const pairExchange of pairExchanges) {
+
+    const prioritizePairExchange = ({ latestDate }) =>
+      -(latestDate ? Number(latestDate) : 0);
+
+    const sorted = pairExchanges
+      .slice(0)
+      .sort((a, b) => prioritizePairExchange(b) - prioritizePairExchange(a));
+
+    for (const pairExchange of sorted) {
       await fetchAndCacheHistodays(pairExchange.id);
       // general idea is to schedule fetches over the fetch histodays throttle so the calls are dispatched over time.
       await delay(throttles.fetchHistodays / pairExchanges.length);
