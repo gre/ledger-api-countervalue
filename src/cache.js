@@ -1,106 +1,96 @@
 // @flow
 // cache on top of coinapi & db
 
-import throttle from "lodash/throttle";
+import { of } from "rxjs/observable/of";
+import { bufferTime } from "rxjs/operators";
+import { fromPromise } from "rxjs/observable/fromPromise";
+import { mergeMap } from "rxjs/operators";
 
 import type {
+  PriceUpdate,
   Histodays,
   Pair,
   DailyAPIResponse,
-  DailyAPIResponsePairData,
   ExchangesAPIRequest,
   ExchangesAPIResponse,
-  RequestPair,
-  CoinAPI_TickerMessage
+  RequestPair
 } from "./types";
-import {
-  updateHistodays,
-  queryExchanges,
-  querySymbolsByPairs,
-  querySymbolsByPair,
-  querySymbolById,
-  updateSymbolStats,
-  updateExchanges,
-  insertAssetSymbols,
-  updateLiveRates
-} from "./db";
-import {
-  fetchAvailableSpotSymbols,
-  fetchExchanges,
-  fetchHistodaysSeries,
-  subscribeTickerMessages
-} from "./coinapi";
+import { getCurrentDatabase } from "./db";
+import { getCurrentProvider } from "./providers";
 import {
   formatDay,
-  parseSymbol,
+  pairExchangeFromId,
   getFiatOrCurrency,
   convertToCentSatRate,
-  allTickers,
   supportTicker,
   promiseThrottle
 } from "./utils";
-import { failRefreshingData } from "./logger";
+import { failRefreshingData, pullLiveRatesDebugMessage } from "./logger";
+
+const provider = getCurrentProvider();
+provider.init();
+
+const db = getCurrentDatabase();
 
 const throttles = {
-  fetchSymbols: 60 * 60 * 1000,
+  fetchPairExchanges: 60 * 60 * 1000,
   fetchExchanges: 60 * 60 * 1000,
   fetchHistodays: 15 * 60 * 1000,
   updateLiveRates: 1000
 };
 
-const fetchAndCacheAvailableSpotSymbols = promiseThrottle(async () => {
-  const spotSymbols = await fetchAvailableSpotSymbols();
-  const symbols = spotSymbols.map(s => ({
-    from: s.asset_id_base,
-    to: s.asset_id_quote,
-    from_to: s.asset_id_base + "_" + s.asset_id_quote,
-    exchange: s.exchange_id,
-    id: s.symbol_id,
+// TODO all promiseThrottle should use a DB so it is shared across multiple server instances
+// also I think this cache need to exist at the provider level.
+
+const fetchAndCacheAvailablePairExchanges = promiseThrottle(async () => {
+  const { fetchAvailablePairExchanges } = provider;
+  const pairExchanges = await fetchAvailablePairExchanges();
+  const pairExchangesData = pairExchanges.map(s => ({
+    from: s.from,
+    to: s.to,
+    from_to: s.from + "_" + s.to,
+    exchange: s.exchange,
+    id: s.id,
     latest: 0,
     latestDate: null,
     yesterdayVolume: 0,
-    hasHistoryFor30LastDays: true, // optimistically thinking the symbol will have data, updates at each sync
+    hasHistoryFor30LastDays: true, // optimistically thinking the pairExchange will have data, updates at each sync
     historyLoadedAtDay: null,
     histodays: {}
   }));
-  await insertAssetSymbols(symbols);
-  return symbols;
-}, throttles.fetchSymbols);
+  await db.insertPairExchangeData(pairExchangesData);
+  return pairExchangesData;
+}, throttles.fetchPairExchanges);
 
 const fetchAndCacheAllExchanges = promiseThrottle(async () => {
-  const apiExchanges = await fetchExchanges();
-  const exchanges = apiExchanges.map(e => ({
-    id: e.exchange_id,
-    website: e.website,
-    name: e.name
-  }));
-  await updateExchanges(exchanges);
+  const { fetchExchanges } = provider;
+  const exchanges = await fetchExchanges();
+  await db.updateExchanges(exchanges);
   return exchanges;
 }, throttles.fetchExchanges);
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const fetchHistodays = async (symbol: string): Histodays => {
+const fetchHistodays = async (pairExchangeId: string): Histodays => {
+  const { fetchHistodaysSeries } = provider;
   const now = new Date();
   const nowT = Date.now();
   const histodays: Histodays = {};
-  const history = await fetchHistodaysSeries(symbol);
-  const symbolData = parseSymbol(symbol);
-  if (!symbolData) return histodays;
-  const from = getFiatOrCurrency(symbolData.from);
-  const to = getFiatOrCurrency(symbolData.to);
+  const history = await fetchHistodaysSeries(pairExchangeId);
+  history.sort((a, b) => b.time - a.time);
+  const pairExchangeData = pairExchangeFromId(pairExchangeId);
+  if (!pairExchangeData) return histodays;
+  const from = getFiatOrCurrency(pairExchangeData.from);
+  const to = getFiatOrCurrency(pairExchangeData.to);
   if (!from || !to) return histodays;
   for (const data of history) {
-    const day =
-      new Date(data.time_period_end) > now
-        ? "latest"
-        : formatDay(new Date(data.time_period_start));
-    const rate = convertToCentSatRate(from, to, data.price_close);
+    const day = data.time > now - DAY ? "latest" : formatDay(data.time);
+    const rate = convertToCentSatRate(from, to, data.close);
     histodays[day] = rate;
   }
   const yesterdayVolume =
-    history[1] && new Date(history[1].time_period_end) > new Date(nowT - DAY)
-      ? history[1].volume_traded
+    history[1] && new Date(history[1].time) > new Date(nowT - 2 * DAY)
+      ? history[1].volume
       : 0;
   let hasHistoryFor30LastDays = "latest" in histodays;
   if (hasHistoryFor30LastDays) {
@@ -119,87 +109,87 @@ const fetchHistodays = async (symbol: string): Histodays => {
   if (histodays.latest) {
     stats.latestDate = now;
   }
-  updateSymbolStats(symbol, stats);
+  db.updatePairExchangeStats(pairExchangeId, stats);
   return histodays;
 };
 
 const fetchAndCacheHistodays_caches = {};
-const fetchAndCacheHistodays_makeThrottle = (symbolId: string) =>
+const fetchAndCacheHistodays_makeThrottle = (id: string) =>
   promiseThrottle(async () => {
     const now = new Date();
     const day = formatDay(now);
-    const symbol = await querySymbolById(symbolId);
-    if (symbol) {
-      if (symbol.historyLoadedAtDay === day) {
+    const pairExchange = await db.queryPairExchangeById(id);
+    if (pairExchange) {
+      if (pairExchange.historyLoadedAtDay === day) {
         // already loaded today
-        return symbol.histodays;
+        return pairExchange.histodays;
       }
       try {
-        const histodays = await fetchHistodays(symbolId);
-        updateHistodays(symbolId, histodays);
+        const histodays = await fetchHistodays(id);
+        db.updateHistodays(id, histodays);
         return histodays;
       } catch (e) {
-        return symbol.histodays;
+        failRefreshingData(e, "fetchAndCacheHistodays");
+        return pairExchange.histodays;
       }
     }
   }, throttles.fetchHistodays);
 
-const fetchAndCacheHistodays = (symbolId: string) => {
+const fetchAndCacheHistodays = (id: string) => {
   const f =
-    fetchAndCacheHistodays_caches[symbolId] ||
-    (fetchAndCacheHistodays_caches[
-      symbolId
-    ] = fetchAndCacheHistodays_makeThrottle(symbolId));
+    fetchAndCacheHistodays_caches[id] ||
+    (fetchAndCacheHistodays_caches[id] = fetchAndCacheHistodays_makeThrottle(
+      id
+    ));
   return f();
 };
 
-export const getSymbolsForPairs = async (pairs: Pair[]) => {
+export const getPairExchangesForPairs = async (pairs: Pair[]) => {
   try {
-    await fetchAndCacheAvailableSpotSymbols();
+    await fetchAndCacheAvailablePairExchanges();
   } catch (e) {
-    failRefreshingData(e, "symbols");
+    failRefreshingData(e, "getPairExchangesForPairs");
   }
-  const symbols = await querySymbolsByPairs(pairs);
-  return symbols;
+  const pairExchanges = await db.queryPairExchangesByPairs(pairs);
+  return pairExchanges;
 };
 
-export const getSymbolsForPair = async (pair: Pair, opts: *) => {
+export const getPairExchangesForPair = async (pair: Pair, opts: *) => {
   try {
-    await fetchAndCacheAvailableSpotSymbols();
+    await fetchAndCacheAvailablePairExchanges();
   } catch (e) {
-    failRefreshingData(e, "symbols");
+    failRefreshingData(e, "getPairExchangesForPair");
   }
-  const symbols = await querySymbolsByPair(pair, opts);
-  return symbols;
+  const pairExchanges = await db.queryPairExchangesByPair(pair, opts);
+  return pairExchanges;
 };
 
 export async function getDailyRequest(
   pairs: RequestPair[]
 ): Promise<DailyAPIResponse> {
   const response = {};
-  const symbols = await getSymbolsForPairs(
+  const pairExchanges = await getPairExchangesForPairs(
     pairs.map(({ from, to }) => ({ from, to }))
   );
   for (const { from, to, exchange, afterDay } of pairs) {
-    const symbolCandidates = symbols.filter(
+    const pairExchangeCandidates = pairExchanges.filter(
       s => s.from === from && s.to === to
     );
-    const symbol = exchange
-      ? symbolCandidates.find(s => s.exchange === exchange)
-      : symbolCandidates[0];
-    if (symbol) {
-      const histodays = await fetchAndCacheHistodays(symbol.id);
-      const pairResult: DailyAPIResponsePairData = {
-        latest: symbol.latest
-      };
+    const pairExchange = exchange
+      ? pairExchangeCandidates.find(s => s.exchange === exchange)
+      : pairExchangeCandidates[0];
+    if (pairExchange) {
+      const histodays = await fetchAndCacheHistodays(pairExchange.id);
+      const pairResult = {};
       for (let day in histodays) {
         if (!afterDay || day > afterDay) {
           pairResult[day] = histodays[day];
         }
       }
+      pairResult.latest = pairExchange.latest;
       if (!response[to]) response[to] = {};
       if (!response[to][from]) response[to][from] = {};
-      response[to][from][symbol.exchange] = pairResult;
+      response[to][from][pairExchange.exchange] = pairResult;
     }
   }
   return response;
@@ -213,12 +203,12 @@ export const getExchanges = async (
     exchanges = await fetchAndCacheAllExchanges();
   } catch (e) {
     failRefreshingData(e, "exchanges");
-    exchanges = await queryExchanges();
+    exchanges = await db.queryExchanges();
   }
-  const symbols = await getSymbolsForPair(request.pair, {
+  const pairExchanges = await getPairExchangesForPair(request.pair, {
     filterWithHistory: true
   });
-  return symbols.map(s => {
+  return pairExchanges.map(s => {
     const { id, name, website } = exchanges.find(e => e.id === s.exchange) || {
       id: s.exchange,
       name: s.exchange,
@@ -232,58 +222,66 @@ export const getExchanges = async (
   });
 };
 
-export const pullLiveRates = (
-  onMsg: CoinAPI_TickerMessage => void,
-  onError: string => void,
-  onEnd: () => void = () => {}
-) => {
-  const tickerMessagesBuffer: CoinAPI_TickerMessage[] = [];
-  const flushBuffer = throttle(() => {
-    if (tickerMessagesBuffer.length === 0) return;
-    const ratesPerSymbol: { [_: string]: number } = {};
-    for (const msg of tickerMessagesBuffer) {
-      const symbol = msg.symbol_id;
-      const symbolData = parseSymbol(symbol);
-      if (
-        symbolData &&
-        supportTicker(symbolData.from) &&
-        supportTicker(symbolData.to)
-      ) {
-        const from = getFiatOrCurrency(symbolData.from);
-        const to = getFiatOrCurrency(symbolData.to);
-        ratesPerSymbol[symbol] = convertToCentSatRate(from, to, msg.price);
-      }
-    }
-    const liveRates = Object.keys(ratesPerSymbol).map(symbol => ({
-      symbol,
-      rate: ratesPerSymbol[symbol]
-    }));
-    updateLiveRates(liveRates);
-  }, throttles.updateLiveRates);
+const $availablePairExchanges = of(null).pipe(
+  mergeMap(() => fromPromise(fetchAndCacheAvailablePairExchanges()))
+);
 
-  return subscribeTickerMessages(
-    allTickers,
-    msg => {
-      tickerMessagesBuffer.push(msg);
-      flushBuffer();
-      onMsg(msg);
+const $priceUpdates = $availablePairExchanges.pipe(
+  mergeMap(provider.subscribePriceUpdate)
+);
+
+const $bufferedPriceUpdates = $priceUpdates.pipe(
+  bufferTime(throttles.updateLiveRates)
+);
+
+export const pullLiveRates = (
+  onError: (?Error) => void,
+  onComplete: () => void
+) =>
+  $bufferedPriceUpdates.subscribe(
+    (buf: PriceUpdate[]) => {
+      if (buf.length === 0) return;
+      const ratesPerId: { [_: string]: number } = {};
+      for (const msg of buf) {
+        const pe = pairExchangeFromId(msg.pairExchangeId);
+        if (supportTicker(pe.from) && supportTicker(pe.to)) {
+          const from = getFiatOrCurrency(pe.from);
+          const to = getFiatOrCurrency(pe.to);
+          ratesPerId[pe.id] = convertToCentSatRate(from, to, msg.price);
+        }
+      }
+      const liveRates = Object.keys(ratesPerId).map(pairExchangeId => ({
+        pairExchangeId,
+        price: ratesPerId[pairExchangeId]
+      }));
+      if (process.env.DEBUG_LIVE_RATES) {
+        pullLiveRatesDebugMessage(liveRates);
+      }
+      db.updateLiveRates(liveRates);
     },
     onError,
-    onEnd
+    onComplete
   );
-};
 
 const delay = ms => new Promise(success => setTimeout(success, ms));
 
-export const prefetchAllSymbols = async () => {
+export const prefetchAllPairExchanges = async () => {
   try {
-    const symbols = await fetchAndCacheAvailableSpotSymbols();
-    for (const symbol of symbols) {
-      await fetchAndCacheHistodays(symbol.id);
+    const pairExchanges = await fetchAndCacheAvailablePairExchanges();
+
+    const prioritizePairExchange = ({ latestDate }) =>
+      -(latestDate ? Number(latestDate) : 0);
+
+    const sorted = pairExchanges
+      .slice(0)
+      .sort((a, b) => prioritizePairExchange(b) - prioritizePairExchange(a));
+
+    for (const pairExchange of sorted) {
+      await fetchAndCacheHistodays(pairExchange.id);
       // general idea is to schedule fetches over the fetch histodays throttle so the calls are dispatched over time.
-      await delay(throttles.fetchHistodays / symbols.length);
+      await delay(throttles.fetchHistodays / pairExchanges.length);
     }
   } catch (e) {
-    failRefreshingData(e, "all symbols");
+    failRefreshingData(e, "all pairExchanges");
   }
 };
