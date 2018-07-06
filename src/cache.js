@@ -144,6 +144,16 @@ const fetchAndCacheHistodays = (id: string) => {
   return f();
 };
 
+const blacklist: string[] = (process.env.BLACKLIST_EXCHANGES || "")
+  .toLowerCase()
+  .split(",");
+
+const isAcceptedExchange = (exchangeId: string) =>
+  !blacklist.includes(exchangeId.toLowerCase());
+
+const filterPairExchanges = all =>
+  all.filter(o => isAcceptedExchange(o.exchange));
+
 export const getPairExchangesForPairs = async (pairs: Pair[]) => {
   try {
     await fetchAndCacheAvailablePairExchanges();
@@ -151,7 +161,7 @@ export const getPairExchangesForPairs = async (pairs: Pair[]) => {
     failRefreshingData(e, "getPairExchangesForPairs");
   }
   const pairExchanges = await db.queryPairExchangesByPairs(pairs);
-  return pairExchanges;
+  return filterPairExchanges(pairExchanges);
 };
 
 export const getPairExchangesForPair = async (pair: Pair, opts: *) => {
@@ -161,7 +171,7 @@ export const getPairExchangesForPair = async (pair: Pair, opts: *) => {
     failRefreshingData(e, "getPairExchangesForPair");
   }
   const pairExchanges = await db.queryPairExchangesByPair(pair, opts);
-  return pairExchanges;
+  return filterPairExchanges(pairExchanges);
 };
 
 export async function getDailyRequest(

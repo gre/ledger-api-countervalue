@@ -121,7 +121,7 @@ export type Database = {
   queryPairExchangesByPair: (
     pair: Pair,
     opts?: { filterWithHistory?: boolean }
-  ) => Promise<DB_PairExchangeData>,
+  ) => Promise<DB_PairExchangeData[]>,
 
   queryPairExchangeById: (
     pairExchangeId: string
