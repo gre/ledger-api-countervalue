@@ -71,6 +71,13 @@ const fetchAndCacheAllExchanges = promiseThrottle(async () => {
 
 const DAY = 24 * 60 * 60 * 1000;
 
+const MINIMAL_DAYS_TO_CONSIDER_EXCHANGE = Math.min(
+  process.env.MINIMAL_DAYS_TO_CONSIDER_EXCHANGE
+    ? parseInt(process.env.MINIMAL_DAYS_TO_CONSIDER_EXCHANGE, 10)
+    : 20,
+  30
+);
+
 const fetchHistodays = async (pairExchangeId: string): Histodays => {
   const { fetchHistodaysSeries } = provider;
   const now = new Date();
@@ -92,15 +99,16 @@ const fetchHistodays = async (pairExchangeId: string): Histodays => {
     history[1] && new Date(history[1].time) > new Date(nowT - 2 * DAY)
       ? history[1].volume
       : 0;
-  let hasHistoryFor30LastDays = "latest" in histodays;
-  if (hasHistoryFor30LastDays) {
-    for (let t = nowT - 30 * DAY; t < nowT - DAY; t += DAY) {
-      if (!(formatDay(new Date(t)) in histodays)) {
-        hasHistoryFor30LastDays = false;
-        break;
-      }
+
+  let historyCount: number = "latest" in histodays ? 1 : 0;
+  for (let t = nowT - 30 * DAY; t < nowT - DAY; t += DAY) {
+    if (formatDay(new Date(t)) in histodays) {
+      historyCount++;
     }
   }
+
+  const hasHistoryFor30LastDays =
+    historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE;
   const stats: Object = {
     yesterdayVolume,
     hasHistoryFor30LastDays,
