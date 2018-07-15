@@ -191,7 +191,7 @@ export async function getDailyRequest(
   );
   for (const { from, to, exchange, afterDay } of pairs) {
     const pairExchangeCandidates = pairExchanges.filter(
-      s => s.from === from && s.to === to
+      s => s.from === from && s.to === to && s.hasHistoryFor30LastDays
     );
     const pairExchange = exchange
       ? pairExchangeCandidates.find(s => s.exchange === exchange)
