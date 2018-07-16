@@ -16,6 +16,7 @@ import type {
 import { logEndpointError, logEndpointCall } from "./logger";
 import { getCurrentDatabase } from "./db";
 import { supportTicker } from "./utils";
+import { version } from "../package.json";
 
 function endpoint<In, Out>(validateInput: mixed => In, f: In => Promise<Out>) {
   return (req: *, res: *) => {
@@ -106,7 +107,7 @@ app.get("/status", (req: *, res: *) => {
     .statusDB()
     .then(
       () => {
-        res.status(200).send();
+        res.status(200).send(version);
       },
       error => {
         logEndpointError(req, error);
