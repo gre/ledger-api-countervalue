@@ -8,7 +8,8 @@ const MongoClient = require("mongodb").MongoClient;
 const url =
   process.env.MONGODB_URI || "mongodb://localhost:27017/ledger-countervalue";
 
-const connect = () => promisify(MongoClient, "connect", url);
+const connect = () =>
+  promisify(MongoClient, "connect", url, { useNewUrlParser: true });
 
 const init = async () => {
   const client = await connect();
@@ -55,7 +56,7 @@ async function updateLiveRates(all) {
     all.map(item =>
       promisify(
         coll,
-        "update",
+        "updateOne",
         { id: item.pairExchangeId },
         {
           $set: {
@@ -73,7 +74,7 @@ async function updateHistodays(id, histodays) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await promisify(coll, "update", { id }, { $set: { histodays } });
+  await promisify(coll, "updateOne", { id }, { $set: { histodays } });
   client.close();
 }
 
@@ -83,7 +84,7 @@ async function updateExchanges(exchanges) {
   const coll = db.collection("exchanges");
   await Promise.all(
     exchanges.map(exchange =>
-      promisify(coll, "update", { id: exchange.id }, exchange, {
+      promisify(coll, "updateOne", { id: exchange.id }, exchange, {
         upsert: true
       })
     )
@@ -98,7 +99,7 @@ async function insertPairExchangeData(pairExchanges) {
   await Promise.all(
     pairExchanges.map(pairExchange =>
       // we don't insert if it already exist to not override existing data.
-      promisify(coll, "insert", pairExchange).catch(() => null)
+      promisify(coll, "insertOne", pairExchange).catch(() => null)
     )
   );
   client.close();
@@ -108,7 +109,7 @@ async function updatePairExchangeStats(id, stats) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await promisify(coll, "update", { id }, { $set: stats });
+  await promisify(coll, "updateOne", { id }, { $set: stats });
   client.close();
 }
 
