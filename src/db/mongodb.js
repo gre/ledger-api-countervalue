@@ -33,6 +33,14 @@ const init = async () => {
     },
     { unique: true }
   );
+  await promisify(
+    db.collection("marketcap_coins"),
+    "createIndex",
+    {
+      day: 1
+    },
+    { unique: true }
+  );
   client.close();
 };
 
@@ -113,6 +121,22 @@ async function updatePairExchangeStats(id, stats) {
   client.close();
 }
 
+async function updateMarketCapCoins(day, coins) {
+  const client = await connect();
+  const db = client.db();
+  const coll = db.collection("marketcap_coins");
+  await promisify(
+    coll,
+    "updateOne",
+    { day },
+    { day, coins },
+    {
+      upsert: true
+    }
+  );
+  client.close();
+}
+
 async function queryExchanges() {
   const client = await connect();
   const db = client.db();
@@ -171,6 +195,15 @@ const queryPairExchangeById = async id => {
   return doc;
 };
 
+const queryMarketCapCoinsForDay = async day => {
+  const client = await connect();
+  const db = client.db();
+  const coll = db.collection("marketcap_coins");
+  const doc = await promisify(coll, "findOne", { day });
+  client.close();
+  return doc && doc.coins;
+};
+
 const database: Database = {
   init,
   statusDB,
@@ -179,10 +212,12 @@ const database: Database = {
   updateExchanges,
   insertPairExchangeData,
   updatePairExchangeStats,
+  updateMarketCapCoins,
   queryExchanges,
   queryPairExchangesByPairs,
   queryPairExchangesByPair,
-  queryPairExchangeById
+  queryPairExchangeById,
+  queryMarketCapCoinsForDay
 };
 
 export default database;

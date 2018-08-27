@@ -114,6 +114,11 @@ export type Database = {
     }
   ) => Promise<void>,
 
+  updateMarketCapCoins: (
+    day: string,
+    markercapcoins: string[]
+  ) => Promise<void>,
+
   queryExchanges: () => Promise<DB_Exchange[]>,
 
   queryPairExchangesByPairs: (pairs: Pair[]) => Promise<DB_PairExchangeData[]>,
@@ -125,7 +130,9 @@ export type Database = {
 
   queryPairExchangeById: (
     pairExchangeId: string
-  ) => Promise<DB_PairExchangeData>
+  ) => Promise<DB_PairExchangeData>,
+
+  queryMarketCapCoinsForDay: (day: string) => Promise<?(string[])>
 };
 
 export type DB_Exchange = {|

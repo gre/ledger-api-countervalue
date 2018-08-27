@@ -4,7 +4,7 @@
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
-import { getExchanges, getDailyRequest } from "./cache";
+import { getExchanges, getDailyRequest, getDailyMarketCapCoins } from "./cache";
 import type {
   DailyAPIRequest,
   RequestPair,
@@ -142,6 +142,8 @@ app.get(
     }
   )
 );
+
+app.get("/tickers", endpoint(() => null, getDailyMarketCapCoins));
 
 if (process.env.HACK_SYNC_IN_SERVER) {
   require("./sync");
