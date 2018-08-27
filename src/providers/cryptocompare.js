@@ -109,7 +109,7 @@ const fetchAvailablePairExchanges = async () => {
       if (!supportTicker(from)) continue;
       const tos = perFrom[from];
       for (const to of tos) {
-        if (!supportTicker(from)) continue;
+        if (!supportTicker(to)) continue;
         all.push(pairExchange(exchange, from, to));
       }
     }
