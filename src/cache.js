@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import { getCurrentDatabase } from "./db";
 import { getCurrentProvider } from "./providers";
+import { tickersByMarketcap } from "./coinmarketcap";
 import {
   formatDay,
   pairExchangeFromId,
@@ -120,6 +121,16 @@ const fetchHistodays = async (pairExchangeId: string): Histodays => {
   db.updatePairExchangeStats(pairExchangeId, stats);
   return histodays;
 };
+
+const fetchDailyMarketCapCoins = promiseThrottle(async () => {
+  const now = new Date();
+  const day = formatDay(now);
+  let coins = await db.queryMarketCapCoinsForDay(day);
+  if (coins) return coins;
+  coins = await tickersByMarketcap();
+  db.updateMarketCapCoins(day, coins);
+  return coins;
+}, 60000);
 
 const fetchAndCacheHistodays_caches = {};
 const fetchAndCacheHistodays_makeThrottle = (id: string) =>
@@ -239,6 +250,8 @@ export const getExchanges = async (
     };
   });
 };
+
+export const getDailyMarketCapCoins = async () => fetchDailyMarketCapCoins();
 
 const $availablePairExchanges = of(null).pipe(
   mergeMap(() => fromPromise(fetchAndCacheAvailablePairExchanges()))
