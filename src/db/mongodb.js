@@ -60,89 +60,116 @@ async function updateLiveRates(all) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await Promise.all(
-    all.map(item =>
-      promisify(
-        coll,
-        "updateOne",
-        { id: item.pairExchangeId },
-        {
-          $set: {
-            latest: item.price,
-            latestDate: new Date()
+  try {
+    await Promise.all(
+      all.map(item =>
+        promisify(
+          coll,
+          "updateOne",
+          { id: item.pairExchangeId },
+          {
+            $set: {
+              latest: item.price,
+              latestDate: new Date()
+            }
           }
-        }
+        )
       )
-    )
-  );
-  client.close();
+    );
+  } finally {
+    client.close();
+  }
 }
 
 async function updateHistodays(id, histodays) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await promisify(coll, "updateOne", { id }, { $set: { histodays } });
-  client.close();
+  try {
+    await promisify(coll, "updateOne", { id }, { $set: { histodays } });
+  } finally {
+    client.close();
+  }
 }
 
 async function updateExchanges(exchanges) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("exchanges");
-  await Promise.all(
-    exchanges.map(exchange =>
-      promisify(coll, "updateOne", { id: exchange.id }, exchange, {
-        upsert: true
-      })
-    )
-  );
-  client.close();
+  try {
+    await Promise.all(
+      exchanges.map(exchange =>
+        promisify(
+          coll,
+          "updateOne",
+          { id: exchange.id },
+          { $set: exchange },
+          {
+            upsert: true
+          }
+        )
+      )
+    );
+  } finally {
+    client.close();
+  }
 }
 
 async function insertPairExchangeData(pairExchanges) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await Promise.all(
-    pairExchanges.map(pairExchange =>
-      // we don't insert if it already exist to not override existing data.
-      promisify(coll, "insertOne", pairExchange).catch(() => null)
-    )
-  );
-  client.close();
+  try {
+    await Promise.all(
+      pairExchanges.map(pairExchange =>
+        // we don't insert if it already exist to not override existing data.
+        promisify(coll, "insertOne", pairExchange).catch(() => null)
+      )
+    );
+  } finally {
+    client.close();
+  }
 }
 
 async function updatePairExchangeStats(id, stats) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await promisify(coll, "updateOne", { id }, { $set: stats });
-  client.close();
+  try {
+    await promisify(coll, "updateOne", { id }, { $set: stats });
+  } finally {
+    client.close();
+  }
 }
 
 async function updateMarketCapCoins(day, coins) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("marketcap_coins");
-  await promisify(
-    coll,
-    "updateOne",
-    { day },
-    { day, coins },
-    {
-      upsert: true
-    }
-  );
-  client.close();
+  try {
+    await promisify(
+      coll,
+      "updateOne",
+      { day },
+      { day, coins },
+      {
+        upsert: true
+      }
+    );
+  } finally {
+    client.close();
+  }
 }
 
 async function queryExchanges() {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("exchanges");
-  const docs = await promisify(coll.find(), "toArray");
-  client.close();
+  try {
+    const docs = await promisify(coll.find(), "toArray");
+  } finally {
+    client.close();
+  }
   return docs;
 }
 
@@ -155,18 +182,21 @@ async function queryPairExchangesByPairs(pairs) {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const docs = await promisify(
-    queryPairExchangesSortCursor(
-      coll.find({
-        from_to: {
-          $in: pairs.map(p => p.from + "_" + p.to)
-        }
-      })
-    ),
-    "toArray"
-  );
-  client.close();
-  return docs;
+  try {
+    const docs = await promisify(
+      queryPairExchangesSortCursor(
+        coll.find({
+          from_to: {
+            $in: pairs.map(p => p.from + "_" + p.to)
+          }
+        })
+      ),
+      "toArray"
+    );
+    return docs;
+  } finally {
+    client.close();
+  }
 }
 
 async function queryPairExchangesByPair(pair, opts = {}) {
@@ -178,30 +208,39 @@ async function queryPairExchangesByPair(pair, opts = {}) {
   if (opts.filterWithHistory) {
     query.hasHistoryFor30LastDays = true;
   }
-  const docs = await promisify(
-    queryPairExchangesSortCursor(coll.find(query)),
-    "toArray"
-  );
-  client.close();
-  return docs;
+  try {
+    const docs = await promisify(
+      queryPairExchangesSortCursor(coll.find(query)),
+      "toArray"
+    );
+    return docs;
+  } finally {
+    client.close();
+  }
 }
 
 const queryPairExchangeById = async id => {
   const client = await connect();
   const db = client.db();
   const histodaysCol = db.collection("pairExchanges");
-  const doc = await promisify(histodaysCol, "findOne", { id });
-  client.close();
-  return doc;
+  try {
+    const doc = await promisify(histodaysCol, "findOne", { id });
+    return doc;
+  } finally {
+    client.close();
+  }
 };
 
 const queryMarketCapCoinsForDay = async day => {
   const client = await connect();
   const db = client.db();
   const coll = db.collection("marketcap_coins");
-  const doc = await promisify(coll, "findOne", { day });
-  client.close();
-  return doc && doc.coins;
+  try {
+    const doc = await promisify(coll, "findOne", { day });
+    return doc && doc.coins;
+  } finally {
+    client.close();
+  }
 };
 
 const database: Database = {
