@@ -85,9 +85,9 @@
     camelcase "^5.0.0"
     prettier "^1.13.7"
 
-"@ledgerhq/live-common@3.5.1":
-  version "3.5.1"
-  resolved "https://registry.yarnpkg.com/@ledgerhq/live-common/-/live-common-3.5.1.tgz#dab3eb061f361999a9e04ef564808831faac61ea"
+"@ledgerhq/live-common@3.7.0":
+  version "3.7.0"
+  resolved "https://registry.yarnpkg.com/@ledgerhq/live-common/-/live-common-3.7.0.tgz#fdac20ed5db8de57406ed186c7fc3ecc797fe8e6"
   dependencies:
     axios "^0.18.0"
     bignumber.js "^7.2.1"
