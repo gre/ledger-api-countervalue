@@ -55,7 +55,7 @@ async function statusDB() {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const count = await promisify(coll, "count");
+  const count = await promisify(coll, "countDocuments");
   if (count === 0) throw new Error("database is empty");
 }
 
@@ -133,7 +133,7 @@ async function updateMarketCapCoins(day, coins) {
     coll,
     "updateOne",
     { day },
-    { day, coins },
+    { $set: { day, coins } },
     {
       upsert: true
     }
