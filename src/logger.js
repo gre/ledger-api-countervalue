@@ -3,6 +3,9 @@
 
 import type { PriceUpdate } from "./types";
 import querystring from "querystring";
+import moment from "moment";
+
+const now = () => moment().format("YYYY-MM-DD hh:mm:ss");
 
 const conciseHttpError = error => {
   if (
@@ -19,7 +22,9 @@ export const logAPI = ({ api, url, duration, opts, status }: *) => {
   const queryString =
     opts && opts.params ? querystring.stringify(opts.params) : "";
   console.log(
-    api +
+    now() +
+      " " +
+      api +
       " call: HTTP " +
       status +
       " (" +
@@ -34,7 +39,9 @@ export const logAPIError = ({ api, url, duration, opts, error }: *) => {
   const queryString =
     opts && opts.params ? querystring.stringify(opts.params) : "";
   console.log(
-    api +
+    now() +
+      " " +
+      api +
       " call: ERROR (" +
       duration.toFixed(0) +
       "ms) <= " +
@@ -46,24 +53,28 @@ export const logAPIError = ({ api, url, duration, opts, error }: *) => {
 };
 
 export const logEndpointCall = (request: *) => {
-  console.log(`${request.method} ${request.url}`);
+  console.log(`${now()} ${request.method} ${request.url}`);
 };
 
 export const logEndpointError = (request: *, error: *) => {
   console.log(
-    `${request.method} ${request.url} =>`,
+    `${now()} ${request.method} ${request.url} =>`,
     conciseHttpError(error),
     error && error.stack
   );
 };
 
 export const pullLiveRatesDebugMessage = (msgs: PriceUpdate[]) =>
-  console.log(msgs.map(msg => `${msg.pairExchangeId} ${msg.price}`).join("\n"));
+  console.log(
+    now() +
+      " " +
+      msgs.map(msg => `${msg.pairExchangeId} ${msg.price}`).join("\n")
+  );
 
 export const pullLiveRatesError = (err: *) =>
-  console.error("pullLiveRatesError", err);
+  console.error(now() + " pullLiveRatesError", err);
 
-export const pullLiveRatesEnd = () => console.warn("pullLiveRatesEnd");
+export const pullLiveRatesEnd = () => console.warn(now() + " pullLiveRatesEnd");
 
 export const failRefreshingData = (err: *, id: string) =>
-  console.error(`FAIL REFRESH ${id}: ${conciseHttpError(err)}`);
+  console.error(`${now()} FAIL REFRESH ${id}: ${conciseHttpError(err)}`);
