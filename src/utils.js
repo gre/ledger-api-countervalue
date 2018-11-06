@@ -4,7 +4,7 @@ import type { PairExchange } from "./types";
 import {
   listCryptoCurrencies,
   listFiatCurrencies
-} from "@ledgerhq/live-common/lib/helpers/currencies";
+} from "@ledgerhq/live-common/lib/currencies";
 import type { Currency } from "@ledgerhq/live-common/lib/types";
 import throttle from "lodash/throttle";
 

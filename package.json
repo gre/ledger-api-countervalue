@@ -13,7 +13,7 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
-    "@ledgerhq/live-common": "3.7.0",
+    "@ledgerhq/live-common": "4.2.1",
     "axios": "^0.18.0",
     "babel-cli": "^6.26.0",
     "babel-eslint": "^8.2.6",
