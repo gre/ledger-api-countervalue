@@ -3,9 +3,8 @@
 
 import type { PriceUpdate } from "./types";
 import querystring from "querystring";
-import moment from "moment";
 
-const now = () => moment().format("YYYY-MM-DD hh:mm:ss");
+const now = () => new Date().toISOString();
 
 const conciseHttpError = error => {
   if (
