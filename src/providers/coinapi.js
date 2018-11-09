@@ -10,7 +10,7 @@ import {
   pairExchange,
   pairExchangeFromId
 } from "../utils";
-import { logAPI, logAPIError } from "../logger";
+import { logAPI, logError, logAPIError, log } from "../logger";
 import type { PairExchange, Provider } from "../types";
 
 type CoinAPI_TickerMessage = {|
@@ -166,11 +166,32 @@ const fetchAvailablePairExchanges = async () => {
   return pairExchanges;
 };
 
+let websocketTotal = 0;
+let MAX_WEBSOCKET = 2;
+
 const subscribePriceUpdate = () =>
   Observable.create(o => {
+    log("coinapi WebSocket: create (total=" + websocketTotal + ")");
+    let done = false;
+    if (websocketTotal >= MAX_WEBSOCKET) {
+      log(
+        "coinapi WebSocket: too many WebSocket opened. this should not happen"
+      );
+      process.exit(1);
+    }
+    websocketTotal++;
     const ws = new WebSocket("wss://ws.coinapi.io/v1/");
     const tickers = allTickers;
     ws.on("open", () => {
+      if (done) {
+        try {
+          ws.close();
+        } catch (e) {
+          logError("failed to close WebSocket", e);
+        }
+        return;
+      }
+      log("coinapi WebSocket: open");
       ws.send(
         JSON.stringify({
           type: "hello",
@@ -182,6 +203,7 @@ const subscribePriceUpdate = () =>
       );
     });
     ws.on("message", data => {
+      if (done) return;
       const r = JSON.parse(data);
       if (r && typeof r === "object") {
         if (r.type === "error") {
@@ -200,11 +222,20 @@ const subscribePriceUpdate = () =>
       }
     });
     ws.on("close", () => {
+      log("coinapi WebSocket: close");
+      done = true;
       o.complete();
+      websocketTotal--;
     });
 
     function unsubscribe() {
-      ws.close();
+      log("coinapi WebSocket: unsubscribe");
+      done = true;
+      try {
+        ws.close();
+      } catch (e) {
+        logError("failed to close WebSocket", e);
+      }
     }
 
     return { unsubscribe };

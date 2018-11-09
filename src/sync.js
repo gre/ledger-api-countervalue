@@ -1,5 +1,6 @@
 // @flow
 // Synchronize the local database with distant service
+import "./nodeCrashOnUncaught";
 import { getCurrentDatabase } from "./db";
 import { prefetchAllPairExchanges, pullLiveRates } from "./cache";
 import { pullLiveRatesError, pullLiveRatesEnd } from "./logger";
