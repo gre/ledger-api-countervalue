@@ -26,7 +26,7 @@ import {
   supportTicker,
   promiseThrottle
 } from "./utils";
-import { failRefreshingData, pullLiveRatesDebugMessage } from "./logger";
+import { failRefreshingData, pullLiveRatesDebugMessage, log } from "./logger";
 
 const provider = getCurrentProvider();
 provider.init();
@@ -79,6 +79,9 @@ const MINIMAL_DAYS_TO_CONSIDER_EXCHANGE = Math.min(
   30
 );
 
+// a high order of volatility is extreme and tells something is wrong with data
+const MAXIMUM_RATIO_EXTREME_VARIATION = 1000;
+
 const fetchHistodays = async (pairExchangeId: string): Histodays => {
   const { fetchHistodaysSeries } = provider;
   const now = new Date();
@@ -101,15 +104,32 @@ const fetchHistodays = async (pairExchangeId: string): Histodays => {
       ? history[1].volume
       : 0;
 
+  let minimum = histodays.latest || Infinity;
+  let maximum = histodays.latest || 0;
   let historyCount: number = "latest" in histodays ? 1 : 0;
   for (let t = nowT - 30 * DAY; t < nowT - DAY; t += DAY) {
-    if (formatDay(new Date(t)) in histodays) {
+    const key = formatDay(new Date(t));
+    const value = histodays[key];
+    if (key in histodays && value > 0) {
       historyCount++;
+      minimum = Math.min(minimum, histodays[key]);
+      maximum = Math.max(maximum, histodays[key]);
     }
   }
 
+  const minMaxRatio = maximum / minimum;
+  const invalidRatio =
+    minMaxRatio <= 0 || !isFinite(minMaxRatio) || isNaN(minMaxRatio);
+
+  if (!invalidRatio && minMaxRatio >= MAXIMUM_RATIO_EXTREME_VARIATION) {
+    log("ExtremeRatioFound: " + minMaxRatio + " on " + pairExchangeId);
+  }
+
+  // We assume an exchange valid if it have enough days data AND there is no invalid datapoints
   const hasHistoryFor30LastDays =
-    historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE;
+    historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE &&
+    !invalidRatio &&
+    minMaxRatio < MAXIMUM_RATIO_EXTREME_VARIATION;
   const stats: Object = {
     yesterdayVolume,
     hasHistoryFor30LastDays,
