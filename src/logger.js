@@ -63,6 +63,14 @@ export const logEndpointError = (request: *, error: *) => {
   );
 };
 
+export const log = (l: string) => {
+  console.log(`${now()} ${l}`);
+};
+
+export const logError = (l: string, e: *) => {
+  console.error(`${now()} ${l}`, e && e.stack);
+};
+
 export const pullLiveRatesDebugMessage = (msgs: PriceUpdate[]) =>
   console.log(
     now() +
