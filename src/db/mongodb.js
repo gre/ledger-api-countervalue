@@ -56,7 +56,6 @@ const metaId = "meta_1";
 async function setMeta(meta) {
   const client = await getDB();
   const db = client.db();
-  console.log("setMeta", meta);
   await promisify(
     db.collection("meta"),
     "updateOne",
@@ -187,6 +186,7 @@ async function queryExchanges() {
 
 const queryPairExchangesSortCursor = cursor =>
   cursor.sort({
+    hasHistoryFor1Year: -1,
     yesterdayVolume: -1
   });
 
