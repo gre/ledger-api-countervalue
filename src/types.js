@@ -88,8 +88,15 @@ export type Provider = {
 };
 // Database types
 
+export type DBMeta = {
+  lastLiveRatesSync: Date,
+  lastMarketCapSync: Date
+};
+
 export type Database = {
   init: () => Promise<void>,
+
+  getMeta: () => Promise<DBMeta>,
 
   statusDB: () => Promise<void>,
 

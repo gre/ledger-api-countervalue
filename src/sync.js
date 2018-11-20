@@ -2,8 +2,12 @@
 // Synchronize the local database with distant service
 import "./nodeCrashOnUncaught";
 import { getCurrentDatabase } from "./db";
-import { prefetchAllPairExchanges, pullLiveRates } from "./cache";
-import { pullLiveRatesError, pullLiveRatesEnd } from "./logger";
+import {
+  prefetchAllPairExchanges,
+  pullLiveRates,
+  getDailyMarketCapCoins
+} from "./cache";
+import { pullLiveRatesError, pullLiveRatesEnd, log, logError } from "./logger";
 import { recurrentJob } from "./utils";
 
 const rebootTimeIfError = 60 * 1000;
@@ -15,6 +19,10 @@ getCurrentDatabase()
   .init()
   .then(() => {
     function pullLoop() {
+      getDailyMarketCapCoins().catch(e =>
+        logError("marketcap failed to fetch", e)
+      );
+
       const sub = pullLiveRates(
         error => {
           pullLiveRatesError(error);

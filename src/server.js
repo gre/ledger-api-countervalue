@@ -104,17 +104,40 @@ app.post(
 );
 
 app.get("/status", (req: *, res: *) => {
-  getCurrentDatabase()
-    .statusDB()
-    .then(
-      () => {
-        res.status(200).send(version);
-      },
-      error => {
-        logEndpointError(req, error);
-        res.status(500).send();
+  const db = getCurrentDatabase();
+  Promise.all([db.statusDB(), db.getMeta()])
+    .then(([_, meta]) => {
+      const liveSyncAgo = new Date() - meta.lastLiveRatesSync;
+      const marketCapSyncAgo = new Date() - meta.lastMarketCapSync;
+      const servicesDown = [];
+      if (liveSyncAgo > 5 * 60 * 1000) {
+        servicesDown.push("live-rates");
       }
-    );
+      if (marketCapSyncAgo > 25 * 60 * 60 * 1000) {
+        servicesDown.push("marketcap");
+      }
+      if (servicesDown.length > 0) {
+        res.status(500).send(servicesDown.join("\n"));
+      } else {
+        res.status(200).send(version);
+      }
+    })
+    .catch(error => {
+      logEndpointError(req, error);
+      res.status(500).send("database");
+    });
+});
+
+app.get("/status/meta", (req: *, res: *) => {
+  const db = getCurrentDatabase();
+  db.getMeta()
+    .then(meta => {
+      res.status(200).send(meta);
+    })
+    .catch(error => {
+      logEndpointError(req, error);
+      res.status(500).send();
+    });
 });
 
 app.get(
