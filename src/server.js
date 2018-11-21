@@ -14,7 +14,7 @@ import type {
   ExchangesAPIRequest,
   ExchangesAPIResponse
 } from "./types";
-import { logEndpointError, logEndpointCall } from "./logger";
+import { logEndpointError, logError, logEndpointCall } from "./logger";
 import { getCurrentDatabase } from "./db";
 import { supportTicker } from "./utils";
 import { version } from "../package.json";
@@ -197,4 +197,7 @@ getCurrentDatabase()
     app.listen(port, () => {
       console.log(`Server running on ${port}`); // eslint-disable-line no-console
     });
+    getDailyMarketCapCoins().catch(e =>
+      logError("marketcap failed to fetch", e)
+    );
   });
