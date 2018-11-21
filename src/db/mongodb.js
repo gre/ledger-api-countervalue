@@ -51,6 +51,40 @@ const init = async () => {
   );
 };
 
+const metaId = "meta_1";
+
+async function setMeta(meta) {
+  const client = await getDB();
+  const db = client.db();
+  await promisify(
+    db.collection("meta"),
+    "updateOne",
+    { id: metaId },
+    {
+      $set: meta
+    },
+    { upsert: true }
+  );
+}
+
+async function getMeta() {
+  const client = await getDB();
+  const db = client.db();
+  const { id, _id, ...meta } = await promisify(
+    db.collection("meta"),
+    "findOne",
+    {
+      id: metaId
+    }
+  );
+  console.log({ meta });
+  return {
+    lastLiveRatesSync: new Date(0),
+    lastMarketCapSync: new Date(0),
+    ...meta
+  };
+}
+
 async function statusDB() {
   const client = await getDB();
   const db = client.db();
@@ -78,6 +112,7 @@ async function updateLiveRates(all) {
       )
     )
   );
+  await setMeta({ lastLiveRatesSync: new Date() });
 }
 
 async function updateHistodays(id, histodays) {
@@ -138,6 +173,7 @@ async function updateMarketCapCoins(day, coins) {
       upsert: true
     }
   );
+  await setMeta({ lastMarketCapSync: new Date() });
 }
 
 async function queryExchanges() {
@@ -150,6 +186,7 @@ async function queryExchanges() {
 
 const queryPairExchangesSortCursor = cursor =>
   cursor.sort({
+    hasHistoryFor1Year: -1,
     yesterdayVolume: -1
   });
 
@@ -204,6 +241,7 @@ const queryMarketCapCoinsForDay = async day => {
 
 const database: Database = {
   init,
+  getMeta,
   statusDB,
   updateLiveRates,
   updateHistodays,

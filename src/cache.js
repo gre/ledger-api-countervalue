@@ -55,6 +55,8 @@ const fetchAndCacheAvailablePairExchanges = promiseThrottle(async () => {
     latest: 0,
     latestDate: null,
     yesterdayVolume: 0,
+    oldestDayAgo: 0,
+    hasHistoryFor1Year: false,
     hasHistoryFor30LastDays: true, // optimistically thinking the pairExchange will have data, updates at each sync
     historyLoadedAtDay: null,
     histodays: {}
@@ -94,11 +96,16 @@ const fetchHistodays = async (pairExchangeId: string): Histodays => {
   const from = getFiatOrCurrency(pairExchangeData.from);
   const to = getFiatOrCurrency(pairExchangeData.to);
   if (!from || !to) return histodays;
+
+  let oldestDayAgo = 0;
+
   for (const data of history) {
     const day = data.time > now - DAY ? "latest" : formatDay(data.time);
+    oldestDayAgo = Math.max(Math.floor((now - data.time) / DAY), oldestDayAgo);
     const rate = convertToCentSatRate(from, to, data.close);
     histodays[day] = rate;
   }
+
   const yesterdayVolume =
     history[1] && new Date(history[1].time) > new Date(nowT - 2 * DAY)
       ? history[1].volume
@@ -130,9 +137,14 @@ const fetchHistodays = async (pairExchangeId: string): Histodays => {
     historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE &&
     !invalidRatio &&
     minMaxRatio < MAXIMUM_RATIO_EXTREME_VARIATION;
+
+  const hasHistoryFor1Year = oldestDayAgo > 365;
+
   const stats: Object = {
     yesterdayVolume,
+    oldestDayAgo,
     hasHistoryFor30LastDays,
+    hasHistoryFor1Year,
     historyLoadedAtDay: formatDay(now)
   };
   if (histodays.latest) {

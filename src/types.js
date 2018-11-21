@@ -88,8 +88,15 @@ export type Provider = {
 };
 // Database types
 
+export type DBMeta = {
+  lastLiveRatesSync: Date,
+  lastMarketCapSync: Date
+};
+
 export type Database = {
   init: () => Promise<void>,
+
+  getMeta: () => Promise<DBMeta>,
 
   statusDB: () => Promise<void>,
 
@@ -108,6 +115,8 @@ export type Database = {
     pairExchangeId: string,
     stats: {
       yesterdayVolume?: number,
+      hasHistoryFor1Year?: boolean,
+      oldestDayAgo?: number,
       hasHistoryFor30LastDays?: boolean,
       historyLoadedAtDay?: string,
       latestDate?: Date
@@ -153,6 +162,8 @@ export type DB_PairExchangeData = {|
   // some derivated stats:
   latestDate: ?Date,
   yesterdayVolume: number, // the volume that was traded yesterday
+  oldestDayAgo: number,
+  hasHistoryFor1Year: boolean,
   hasHistoryFor30LastDays: boolean, // track if the histodays are available for the last 30 days
   historyLoadedAtDay: ?string // YYYY-MM-DD date where the histodays was loaded
 |};
