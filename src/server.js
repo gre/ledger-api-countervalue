@@ -115,7 +115,7 @@ app.get("/_health", (req: *, res: *) => {
     })
     .catch(error => {
       logEndpointError(req, error);
-      res.status(500).send({
+      res.status(503).send({
         status: "KO",
         service: "database"
       });
@@ -149,7 +149,7 @@ app.get("/_health/detail", (req: *, res: *) => {
     })
     .catch(error => {
       logEndpointError(req, error);
-      res.status(500).send([
+      res.status(503).send([
         {
           status: "KO",
           service: "database"
