@@ -103,41 +103,56 @@ app.post(
   )
 );
 
-app.get("/status", (req: *, res: *) => {
+app.get("/_health", (req: *, res: *) => {
+  const db = getCurrentDatabase();
+  db.statusDB()
+    .then(() => {
+      res.status(200).send({
+        status: "OK",
+        service: "database",
+        version
+      });
+    })
+    .catch(error => {
+      logEndpointError(req, error);
+      res.status(500).send({
+        status: "KO",
+        service: "database"
+      });
+    });
+});
+
+app.get("/_health/detail", (req: *, res: *) => {
   const db = getCurrentDatabase();
   Promise.all([db.statusDB(), db.getMeta()])
     .then(([_, meta]) => {
       const liveSyncAgo = new Date() - meta.lastLiveRatesSync;
       const marketCapSyncAgo = new Date() - meta.lastMarketCapSync;
-      const servicesDown = [];
-      if (liveSyncAgo > 5 * 60 * 1000) {
-        servicesDown.push("live-rates");
-      }
-      if (marketCapSyncAgo > 25 * 60 * 60 * 1000) {
-        // TODO we'll reable this in next release.
-        // servicesDown.push("marketcap");
-      }
-      if (servicesDown.length > 0) {
-        res.status(500).send(servicesDown.join("\n"));
-      } else {
-        res.status(200).send(version);
-      }
-    })
-    .catch(error => {
-      logEndpointError(req, error);
-      res.status(500).send("database");
-    });
-});
 
-app.get("/status/meta", (req: *, res: *) => {
-  const db = getCurrentDatabase();
-  db.getMeta()
-    .then(meta => {
-      res.status(200).send(meta);
+      const status = [
+        {
+          service: "database",
+          status: "OK"
+        },
+        {
+          service: "live-rates",
+          status: liveSyncAgo > 5 * 60 * 1000 ? "KO" : "OK"
+        },
+        {
+          service: "marketcap",
+          status: marketCapSyncAgo > 25 * 60 * 60 * 1000 ? "KO" : "OK"
+        }
+      ];
+      res.status(status.some(s => s.status === "KO") ? 500 : 200).send(status);
     })
     .catch(error => {
       logEndpointError(req, error);
-      res.status(500).send();
+      res.status(500).send([
+        {
+          status: "KO",
+          service: "database"
+        }
+      ]);
     });
 });
 
