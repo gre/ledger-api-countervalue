@@ -114,10 +114,11 @@ app.get("/status", (req: *, res: *) => {
         servicesDown.push("live-rates");
       }
       if (marketCapSyncAgo > 25 * 60 * 60 * 1000) {
-        servicesDown.push("marketcap");
+        // TODO we'll reable this in next release.
+        // servicesDown.push("marketcap");
       }
       if (servicesDown.length > 0) {
-        res.status(200).send(servicesDown.join("\n"));
+        res.status(500).send(servicesDown.join("\n"));
       } else {
         res.status(200).send(version);
       }
