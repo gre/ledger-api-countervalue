@@ -77,7 +77,6 @@ async function getMeta() {
       id: metaId
     }
   );
-  console.log({ meta });
   return {
     lastLiveRatesSync: new Date(0),
     lastMarketCapSync: new Date(0),
