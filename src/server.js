@@ -136,11 +136,13 @@ app.get("/_health/detail", (req: *, res: *) => {
         },
         {
           service: "live-rates",
-          status: liveSyncAgo > 5 * 60 * 1000 ? "KO" : "OK"
+          status: liveSyncAgo > 5 * 60 * 1000 ? "KO" : "OK",
+          lastDate: meta.lastLiveRatesSync
         },
         {
           service: "marketcap",
-          status: marketCapSyncAgo > 25 * 60 * 60 * 1000 ? "KO" : "OK"
+          status: marketCapSyncAgo > 25 * 60 * 60 * 1000 ? "KO" : "OK",
+          lastDate: meta.lastMarketCapSync
         }
       ];
       res.status(status.some(s => s.status === "KO") ? 500 : 200).send(status);
