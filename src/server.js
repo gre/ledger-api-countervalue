@@ -5,12 +5,12 @@ import "./nodeCrashOnUncaught";
 import express from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
-import { getExchanges, getDailyRequest, getDailyMarketCapCoins } from "./cache";
+import { getExchanges, getHistoRequest, getDailyMarketCapCoins } from "./cache";
 import type {
-  DailyAPIRequest,
+  HistoAPIRequest,
   RequestPair,
   Pair,
-  DailyAPIResponse,
+  HistoAPIResponse,
   ExchangesAPIRequest,
   ExchangesAPIResponse
 } from "./types";
@@ -45,10 +45,17 @@ var app = express();
 app.use(cors());
 
 app.post(
-  "/rates/daily",
+  "/rates/:granularity",
   bodyParser.json(),
   endpoint(
     req => {
+      const granularity =
+        req && typeof req.params === "object" && req.params
+          ? String(req.params.granularity)
+          : "";
+      if (granularity !== "daily" && granularity !== "hourly") {
+        throw new Error("unsupported granularity=" + granularity);
+      }
       if (typeof req !== "object" || !req || typeof req.body !== "object") {
         throw new Error("no body");
       }
@@ -72,15 +79,22 @@ app.post(
       const dedupCheckMap = {};
       for (const o of pairsUnsafe) {
         if (!o || typeof o !== "object") continue;
-        const { from, to, exchange, afterDay } = o;
+        const { from, to, exchange, afterDay, at } = o;
+        let { after } = o;
+        if (granularity !== "daily" && "afterDay" in o) {
+          throw new Error("afterDay is invalid. use 'after' instead");
+        }
+        if (!after) after = afterDay; // afterDay is deprecated but still accepted (safer until we migrate all clients)
         if (typeof from !== "string" || !from || typeof to !== "string" || !to)
           continue;
         if (!supportTicker(from) || !supportTicker(to)) continue;
         const pair: RequestPair = { from, to };
         if (exchange && typeof exchange !== "string") continue;
-        if (afterDay && typeof afterDay !== "string") continue;
+        if (after && typeof after !== "string") continue;
+        if (at && typeof at !== "string") continue;
         if (exchange) pair.exchange = exchange;
-        if (afterDay) pair.afterDay = afterDay;
+        if (after) pair.after = after;
+        if (at) pair.at = at;
         const key = `${from}|${to}|${exchange || ""}`;
         if (key in dedupCheckMap) {
           throw new Error("invalid input: pairs must not contains duplicates");
@@ -94,10 +108,13 @@ app.post(
       if (pairs.length > 100) {
         throw new Error("invalid input: too much pairs requested");
       }
-      return { pairs };
+      return { pairs, granularity };
     },
-    async (request: DailyAPIRequest) => {
-      const r: DailyAPIResponse = await getDailyRequest(request.pairs);
+    async (request: HistoAPIRequest) => {
+      const r: HistoAPIResponse = await getHistoRequest(
+        request.pairs,
+        request.granularity
+      );
       return r;
     }
   )
@@ -125,7 +142,7 @@ app.get("/_health", (req: *, res: *) => {
 app.get("/_health/detail", (req: *, res: *) => {
   const db = getCurrentDatabase();
   Promise.all([db.statusDB(), db.getMeta()])
-    .then(([_, meta]) => {
+    .then(([, meta]) => {
       const liveSyncAgo = new Date() - meta.lastLiveRatesSync;
       const marketCapSyncAgo = new Date() - meta.lastMarketCapSync;
 

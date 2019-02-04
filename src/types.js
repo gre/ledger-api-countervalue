@@ -2,10 +2,12 @@
 
 import type { Observable } from "rxjs";
 
+export type Granularity = "daily" | "hourly";
+
 // Generic types
 
-export type Histodays = {
-  [day: string]: number
+export type Histo = {
+  [_: string]: number
 };
 
 export type Pair = {|
@@ -46,22 +48,24 @@ export type RequestPair = {|
   from: string,
   to: string,
   exchange?: ?string,
-  afterDay?: ?string
+  after?: ?string,
+  at?: ?string
 |};
 
-export type DailyAPIRequest = {|
-  pairs: Array<RequestPair>
+export type HistoAPIRequest = {|
+  pairs: Array<RequestPair>,
+  granularity: Granularity
 |};
 
-export type DailyAPIResponsePairData = {
-  [day: string]: number,
+export type HistoAPIResponsePairData = {
+  [_: string]: number,
   latest: number
 };
 
-export type DailyAPIResponse = {
+export type HistoAPIResponse = {
   [toTicker: string]: {
     [fromTicker: string]: {
-      [exchange: string]: DailyAPIResponsePairData
+      [exchange: string]: HistoAPIResponsePairData
     }
   }
 };
@@ -76,8 +80,9 @@ export type ExchangesAPIResponse = Array<Exchange>;
 
 export type Provider = {
   init: () => void,
-  fetchHistodaysSeries: (
+  fetchHistoSeries: (
     pairExchangeId: string,
+    granularity: Granularity,
     limit?: number
   ) => Promise<TimeseriesOHLCVR[]>,
   fetchExchanges: () => Promise<Exchange[]>,
@@ -102,9 +107,10 @@ export type Database = {
 
   updateLiveRates: (PriceUpdate[]) => Promise<void>,
 
-  updateHistodays: (
+  updateHisto: (
     pairExchangeId: string,
-    histodays: Histodays
+    granularity: Granularity,
+    histo: Histo
   ) => Promise<void>,
 
   updateExchanges: (DB_Exchange[]) => Promise<void>,
@@ -118,7 +124,8 @@ export type Database = {
       hasHistoryFor1Year?: boolean,
       oldestDayAgo?: number,
       hasHistoryFor30LastDays?: boolean,
-      historyLoadedAtDay?: string,
+      historyLoadedAt_day?: string,
+      historyLoadedAt_hour?: string,
       latestDate?: Date
     }
   ) => Promise<void>,
@@ -156,14 +163,17 @@ export type DB_PairExchangeData = {|
   to: string, // e.g. USD
   from_to: string,
   exchange: string, // e.g. KRAKEN. id in DB_Exchange
-  histodays: Histodays, // historic by day of rates. the last day is yesterday
-  latest: number, // latest rate loaded (usually updated by websocket live connection)
+
+  histo_daily: Histo, // historic by day of rates. (i.e. the last day is yesterday)
+  histo_hourly: Histo, // historic by hour
+  latest: number, // live value of latest rate loaded (usually updated by websocket live connection)
 
   // some derivated stats:
   latestDate: ?Date,
   yesterdayVolume: number, // the volume that was traded yesterday
   oldestDayAgo: number,
   hasHistoryFor1Year: boolean,
-  hasHistoryFor30LastDays: boolean, // track if the histodays are available for the last 30 days
-  historyLoadedAtDay: ?string // YYYY-MM-DD date where the histodays was loaded
+  hasHistoryFor30LastDays: boolean, // track if the histo for days are available for the last 30 days
+  historyLoadedAt_daily?: ?string,
+  historyLoadedAt_hourly?: ?string
 |};

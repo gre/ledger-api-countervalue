@@ -1,7 +1,7 @@
 // @flow
 
 import axios from "axios";
-import { currencyTickers } from "./utils";
+import { cryptoTickers } from "./utils";
 import { logAPI, logAPIError } from "./logger";
 
 const CMC_API_KEY = process.env.CMC_API_KEY;
@@ -47,5 +47,5 @@ export async function tickersByMarketcap(): Promise<string[]> {
   });
   return r.data
     .map(c => c.symbol)
-    .filter(ticker => currencyTickers.includes(ticker));
+    .filter(ticker => cryptoTickers.includes(ticker));
 }

@@ -4,14 +4,15 @@ import { Observable } from "rxjs";
 import WebSocket from "ws";
 import axios from "axios";
 import {
-  currencyTickers,
+  cryptoTickers,
   allTickers,
   supportTicker,
   pairExchange,
-  pairExchangeFromId
+  pairExchangeFromId,
+  granularityMs
 } from "../utils";
 import { logAPI, logError, logAPIError, log } from "../logger";
-import type { PairExchange, Provider } from "../types";
+import type { PairExchange, Provider, Granularity } from "../types";
 
 type CoinAPI_TickerMessage = {|
   time_exchange: string,
@@ -109,17 +110,54 @@ const get = async (url: string, opts?: *) => {
   }
 };
 
-const fetchHistodaysSeries = async (id: string, limit: number = 3560) => {
-  const days: CoinAPI_Timeseries[] = await get(
+const granMap = {
+  daily: "1DAY",
+  hourly: "1HRS"
+};
+
+const fetchHistoSeries = async (
+  id: string,
+  granularity: Granularity,
+  limit: number = 10000
+) => {
+  const period_id = granMap[granularity];
+  const periodMs = granularityMs[granularity];
+
+  let points: CoinAPI_Timeseries[] = await get(
     `/v1/ohlcv/${pairExchangeIdToSymbol(id)}/latest`,
     {
       params: {
-        period_id: "1DAY",
+        period_id,
         limit
       }
     }
   );
-  const timeSeries = days.map(d => ({
+
+  if (points.length > 0) {
+    let result: CoinAPI_Timeseries[] = points;
+    let MAX_ITERATION_FAILSAFE = 100;
+    let i = 0;
+    do {
+      const time_end = points[points.length - 1].time_period_start;
+      const time_start = new Date(
+        new Date(time_end) - periodMs * limit
+      ).toISOString();
+      result = await get(`/v1/ohlcv/${pairExchangeIdToSymbol(id)}/history`, {
+        params: {
+          period_id,
+          time_start,
+          time_end
+        }
+      });
+      points = points.concat(result.reverse());
+      if (i++ > MAX_ITERATION_FAILSAFE) {
+        logError("fetchHistoSeries max iteration failsafe reached!");
+        break;
+      }
+    } while (result.length > 0);
+  }
+
+  const timeSeries = points.map(d => ({
     time: new Date(d.time_period_start),
     open: d.price_open,
     high: d.price_high,
@@ -143,9 +181,7 @@ const fetchExchanges = async () => {
 const fetchAvailablePairExchanges = async () => {
   const list: CoinAPI_Symbol[] = await get("/v1/symbols", {
     params: {
-      filter_symbol_id: currencyTickers
-        .map(ticker => `SPOT_${ticker}`)
-        .join(",")
+      filter_symbol_id: "SPOT"
     }
   });
   if (typeof list === "string") {
@@ -243,7 +279,7 @@ const subscribePriceUpdate = () =>
 
 const provider: Provider = {
   init,
-  fetchHistodaysSeries,
+  fetchHistoSeries,
   fetchExchanges,
   fetchAvailablePairExchanges,
   subscribePriceUpdate
