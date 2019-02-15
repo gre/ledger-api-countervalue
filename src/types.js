@@ -49,7 +49,7 @@ export type RequestPair = {|
   to: string,
   exchange?: ?string,
   after?: ?string,
-  at?: ?string
+  at?: string[]
 |};
 
 export type HistoAPIRequest = {|

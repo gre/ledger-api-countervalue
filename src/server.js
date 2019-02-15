@@ -91,10 +91,17 @@ app.post(
         const pair: RequestPair = { from, to };
         if (exchange && typeof exchange !== "string") continue;
         if (after && typeof after !== "string") continue;
-        if (at && typeof at !== "string") continue;
+        let atValidated;
+        if (at) {
+          if (typeof at === "string") {
+            atValidated = [at];
+          } else if (Array.isArray(at)) {
+            atValidated = at.filter(v => typeof v === "string");
+          }
+        }
         if (exchange) pair.exchange = exchange;
         if (after) pair.after = after;
-        if (at) pair.at = at;
+        if (atValidated) pair.at = atValidated;
         const key = `${from}|${to}|${exchange || ""}`;
         if (key in dedupCheckMap) {
           throw new Error("invalid input: pairs must not contains duplicates");

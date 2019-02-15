@@ -266,7 +266,7 @@ export async function getHistoRequest(
       const histo = await fetchAndCacheHisto(pairExchange.id, granularity);
       const pairResult = {};
       for (let key in histo) {
-        if (at ? at === key : !after || key > after) {
+        if (at ? at.includes(key) : !after || key > after) {
           pairResult[key] = histo[key];
         }
       }
