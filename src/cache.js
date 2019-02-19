@@ -8,23 +8,27 @@ import { mergeMap } from "rxjs/operators";
 
 import type {
   PriceUpdate,
-  Histodays,
+  Histo,
   Pair,
-  DailyAPIResponse,
+  HistoAPIResponse,
   ExchangesAPIRequest,
   ExchangesAPIResponse,
-  RequestPair
+  RequestPair,
+  Granularity,
+  PairExchange,
+  DB_PairExchangeData
 } from "./types";
 import { getCurrentDatabase } from "./db";
 import { getCurrentProvider } from "./providers";
 import { tickersByMarketcap } from "./coinmarketcap";
 import {
-  formatDay,
+  formatTime,
   pairExchangeFromId,
   getFiatOrCurrency,
   convertToCentSatRate,
   supportTicker,
-  promiseThrottle
+  promiseThrottle,
+  granularityMs
 } from "./utils";
 import { failRefreshingData, pullLiveRatesDebugMessage, log } from "./logger";
 
@@ -36,7 +40,7 @@ const db = getCurrentDatabase();
 const throttles = {
   fetchPairExchanges: 60 * 60 * 1000,
   fetchExchanges: 60 * 60 * 1000,
-  fetchHistodays: 15 * 60 * 1000,
+  fetchHisto: 15 * 60 * 1000,
   updateLiveRates: 1000
 };
 
@@ -45,8 +49,8 @@ const throttles = {
 
 const fetchAndCacheAvailablePairExchanges = promiseThrottle(async () => {
   const { fetchAvailablePairExchanges } = provider;
-  const pairExchanges = await fetchAvailablePairExchanges();
-  const pairExchangesData = pairExchanges.map(s => ({
+  const pairExchanges: PairExchange[] = await fetchAvailablePairExchanges();
+  const pairExchangesData: DB_PairExchangeData[] = pairExchanges.map(s => ({
     from: s.from,
     to: s.to,
     from_to: s.from + "_" + s.to,
@@ -58,8 +62,10 @@ const fetchAndCacheAvailablePairExchanges = promiseThrottle(async () => {
     oldestDayAgo: 0,
     hasHistoryFor1Year: false,
     hasHistoryFor30LastDays: true, // optimistically thinking the pairExchange will have data, updates at each sync
-    historyLoadedAtDay: null,
-    histodays: {}
+    historyLoadedAt_daily: null,
+    historyLoadedAt_hourly: null,
+    histo_daily: {},
+    histo_hourly: {}
   }));
   await db.insertPairExchangeData(pairExchangesData);
   return pairExchangesData;
@@ -72,8 +78,6 @@ const fetchAndCacheAllExchanges = promiseThrottle(async () => {
   return exchanges;
 }, throttles.fetchExchanges);
 
-const DAY = 24 * 60 * 60 * 1000;
-
 const MINIMAL_DAYS_TO_CONSIDER_EXCHANGE = Math.min(
   process.env.MINIMAL_DAYS_TO_CONSIDER_EXCHANGE
     ? parseInt(process.env.MINIMAL_DAYS_TO_CONSIDER_EXCHANGE, 10)
@@ -84,79 +88,92 @@ const MINIMAL_DAYS_TO_CONSIDER_EXCHANGE = Math.min(
 // a high order of volatility is extreme and tells something is wrong with data
 const MAXIMUM_RATIO_EXTREME_VARIATION = 1000;
 
-const fetchHistodays = async (pairExchangeId: string): Histodays => {
-  const { fetchHistodaysSeries } = provider;
+const fetchHisto = async (
+  pairExchangeId: string,
+  granularity: Granularity
+): Histo => {
+  const { fetchHistoSeries } = provider;
   const now = new Date();
   const nowT = Date.now();
-  const histodays: Histodays = {};
-  const history = await fetchHistodaysSeries(pairExchangeId);
+  const histo: Histo = {};
+  const history = await fetchHistoSeries(pairExchangeId, granularity);
   history.sort((a, b) => b.time - a.time);
   const pairExchangeData = pairExchangeFromId(pairExchangeId);
-  if (!pairExchangeData) return histodays;
+  if (!pairExchangeData) return histo;
   const from = getFiatOrCurrency(pairExchangeData.from);
   const to = getFiatOrCurrency(pairExchangeData.to);
-  if (!from || !to) return histodays;
+  if (!from || !to) return histo;
 
   let oldestDayAgo = 0;
 
+  const granMs = granularityMs[granularity];
   for (const data of history) {
-    const day = data.time > now - DAY ? "latest" : formatDay(data.time);
-    oldestDayAgo = Math.max(Math.floor((now - data.time) / DAY), oldestDayAgo);
+    const key =
+      data.time > now - granMs ? "latest" : formatTime(data.time, granularity);
+    oldestDayAgo = Math.max(
+      Math.floor((now - data.time) / granMs),
+      oldestDayAgo
+    );
     const rate = convertToCentSatRate(from, to, data.close);
-    histodays[day] = rate;
+    histo[key] = rate;
   }
 
-  const yesterdayVolume =
-    history[1] && new Date(history[1].time) > new Date(nowT - 2 * DAY)
-      ? history[1].volume
-      : 0;
+  const stats: Object = {
+    [`historyLoadedAt_${granularity}`]: formatTime(now, granularity)
+  };
 
-  let minimum = histodays.latest || Infinity;
-  let maximum = histodays.latest || 0;
-  let historyCount: number = "latest" in histodays ? 1 : 0;
-  for (let t = nowT - 30 * DAY; t < nowT - DAY; t += DAY) {
-    const key = formatDay(new Date(t));
-    const value = histodays[key];
-    if (key in histodays && value > 0) {
-      historyCount++;
-      minimum = Math.min(minimum, histodays[key]);
-      maximum = Math.max(maximum, histodays[key]);
+  if (granularity === "daily") {
+    const yesterdayVolume =
+      history[1] && new Date(history[1].time) > new Date(nowT - 2 * granMs)
+        ? history[1].volume
+        : 0;
+
+    let minimum = histo.latest || Infinity;
+    let maximum = histo.latest || 0;
+    let historyCount: number = "latest" in histo ? 1 : 0;
+    for (let t = nowT - 30 * granMs; t < nowT - granMs; t += granMs) {
+      const key = formatTime(new Date(t), granularity);
+      const value = histo[key];
+      if (key in histo && value > 0) {
+        historyCount++;
+        minimum = Math.min(minimum, histo[key]);
+        maximum = Math.max(maximum, histo[key]);
+      }
+    }
+
+    const minMaxRatio = maximum / minimum;
+    const invalidRatio =
+      minMaxRatio <= 0 || !isFinite(minMaxRatio) || isNaN(minMaxRatio);
+
+    if (!invalidRatio && minMaxRatio >= MAXIMUM_RATIO_EXTREME_VARIATION) {
+      log("ExtremeRatioFound: " + minMaxRatio + " on " + pairExchangeId);
+    }
+
+    // We assume an exchange valid if it have enough days data AND there is no invalid datapoints
+    const hasHistoryFor30LastDays =
+      historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE &&
+      !invalidRatio &&
+      minMaxRatio < MAXIMUM_RATIO_EXTREME_VARIATION;
+
+    const hasHistoryFor1Year = oldestDayAgo > 365;
+
+    stats.yesterdayVolume = yesterdayVolume;
+    stats.oldestDayAgo = oldestDayAgo;
+    stats.hasHistoryFor30LastDays = hasHistoryFor30LastDays;
+    stats.hasHistoryFor1Year = hasHistoryFor1Year;
+
+    if (histo.latest) {
+      stats.latestDate = now;
     }
   }
 
-  const minMaxRatio = maximum / minimum;
-  const invalidRatio =
-    minMaxRatio <= 0 || !isFinite(minMaxRatio) || isNaN(minMaxRatio);
-
-  if (!invalidRatio && minMaxRatio >= MAXIMUM_RATIO_EXTREME_VARIATION) {
-    log("ExtremeRatioFound: " + minMaxRatio + " on " + pairExchangeId);
-  }
-
-  // We assume an exchange valid if it have enough days data AND there is no invalid datapoints
-  const hasHistoryFor30LastDays =
-    historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE &&
-    !invalidRatio &&
-    minMaxRatio < MAXIMUM_RATIO_EXTREME_VARIATION;
-
-  const hasHistoryFor1Year = oldestDayAgo > 365;
-
-  const stats: Object = {
-    yesterdayVolume,
-    oldestDayAgo,
-    hasHistoryFor30LastDays,
-    hasHistoryFor1Year,
-    historyLoadedAtDay: formatDay(now)
-  };
-  if (histodays.latest) {
-    stats.latestDate = now;
-  }
   db.updatePairExchangeStats(pairExchangeId, stats);
-  return histodays;
+  return histo;
 };
 
 const fetchDailyMarketCapCoins = promiseThrottle(async () => {
   const now = new Date();
-  const day = formatDay(now);
+  const day = formatTime(now, "daily");
   let coins = await db.queryMarketCapCoinsForDay(day);
   if (coins) return coins;
   coins = await tickersByMarketcap();
@@ -164,33 +181,38 @@ const fetchDailyMarketCapCoins = promiseThrottle(async () => {
   return coins;
 }, 60000);
 
-const fetchAndCacheHistodays_caches = {};
-const fetchAndCacheHistodays_makeThrottle = (id: string) =>
+const fetchAndCacheHisto_caches = {};
+const fetchAndCacheHisto_makeThrottle = (
+  id: string,
+  granularity: Granularity
+) =>
   promiseThrottle(async () => {
     const now = new Date();
-    const day = formatDay(now);
+    const nowKey = formatTime(now, granularity);
     const pairExchange = await db.queryPairExchangeById(id);
     if (pairExchange) {
-      if (pairExchange.historyLoadedAtDay === day) {
+      if (pairExchange[`historyLoadedAt_${granularity}`] === nowKey) {
         // already loaded today
-        return pairExchange.histodays;
+        return pairExchange[`histo_${granularity}`];
       }
       try {
-        const histodays = await fetchHistodays(id);
-        db.updateHistodays(id, histodays);
-        return histodays;
+        const history = await fetchHisto(id, granularity);
+        db.updateHisto(id, granularity, history);
+        return history;
       } catch (e) {
-        failRefreshingData(e, "fetchAndCacheHistodays");
-        return pairExchange.histodays;
+        failRefreshingData(e, "fetchAndCacheHisto");
+        return pairExchange[`histo_${granularity}`];
       }
     }
-  }, throttles.fetchHistodays);
+  }, throttles.fetchHisto);
 
-const fetchAndCacheHistodays = (id: string) => {
+const fetchAndCacheHisto = (id: string, granularity: Granularity) => {
+  const key = id + "_" + granularity;
   const f =
-    fetchAndCacheHistodays_caches[id] ||
-    (fetchAndCacheHistodays_caches[id] = fetchAndCacheHistodays_makeThrottle(
-      id
+    fetchAndCacheHisto_caches[key] ||
+    (fetchAndCacheHisto_caches[key] = fetchAndCacheHisto_makeThrottle(
+      id,
+      granularity
     ));
   return f();
 };
@@ -225,14 +247,15 @@ export const getPairExchangesForPair = async (pair: Pair, opts: *) => {
   return filterPairExchanges(pairExchanges);
 };
 
-export async function getDailyRequest(
-  pairs: RequestPair[]
-): Promise<DailyAPIResponse> {
+export async function getHistoRequest(
+  pairs: RequestPair[],
+  granularity: Granularity
+): Promise<HistoAPIResponse> {
   const response = {};
   const pairExchanges = await getPairExchangesForPairs(
     pairs.map(({ from, to }) => ({ from, to }))
   );
-  for (const { from, to, exchange, afterDay } of pairs) {
+  for (const { from, to, exchange, after, at } of pairs) {
     const pairExchangeCandidates = pairExchanges.filter(
       s => s.from === from && s.to === to && s.hasHistoryFor30LastDays
     );
@@ -240,11 +263,11 @@ export async function getDailyRequest(
       ? pairExchangeCandidates.find(s => s.exchange === exchange)
       : pairExchangeCandidates[0];
     if (pairExchange) {
-      const histodays = await fetchAndCacheHistodays(pairExchange.id);
+      const histo = await fetchAndCacheHisto(pairExchange.id, granularity);
       const pairResult = {};
-      for (let day in histodays) {
-        if (!afterDay || day > afterDay) {
-          pairResult[day] = histodays[day];
+      for (let key in histo) {
+        if (at ? at.includes(key) : !after || key > after) {
+          pairResult[key] = histo[key];
         }
       }
       pairResult.latest = pairExchange.latest;
@@ -340,9 +363,10 @@ export const prefetchAllPairExchanges = async () => {
       .sort((a, b) => prioritizePairExchange(b) - prioritizePairExchange(a));
 
     for (const pairExchange of sorted) {
-      await fetchAndCacheHistodays(pairExchange.id);
-      // general idea is to schedule fetches over the fetch histodays throttle so the calls are dispatched over time.
-      await delay(throttles.fetchHistodays / pairExchanges.length);
+      await fetchAndCacheHisto(pairExchange.id, "daily");
+      await fetchAndCacheHisto(pairExchange.id, "hourly");
+      // general idea is to schedule fetches over the fetch histo throttle so the calls are dispatched over time.
+      await delay(throttles.fetchHisto / pairExchanges.length);
     }
   } catch (e) {
     failRefreshingData(e, "all pairExchanges");

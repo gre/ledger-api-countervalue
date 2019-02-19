@@ -1,10 +1,12 @@
 // @flow
 
-import type { PairExchange } from "./types";
+import type { PairExchange, Granularity } from "./types";
 import {
   listCryptoCurrencies,
-  listFiatCurrencies
+  listFiatCurrencies,
+  listTokens
 } from "@ledgerhq/live-common/lib/currencies";
+import "@ledgerhq/live-common/lib/load/tokens/ethereum/erc20";
 import type { Currency } from "@ledgerhq/live-common/lib/types";
 import throttle from "lodash/throttle";
 
@@ -39,10 +41,15 @@ export const recurrentJob = async (fn: Function, ms: number) => {
 
 const currencies = listCryptoCurrencies();
 const fiats = listFiatCurrencies();
-export const all = currencies.concat(fiats);
-export const currencyTickers = listCryptoCurrencies().map(c => c.ticker);
-export const fiatTickers = listFiatCurrencies().map(c => c.ticker);
-export const allTickers = currencyTickers.concat(fiatTickers);
+const tokens = listTokens();
+export const all = currencies.concat(fiats).concat(tokens);
+const currencyTickers = currencies.map(c => c.ticker);
+const fiatTickers = fiats.map(c => c.ticker);
+const tokenTickers = tokens.map(c => c.ticker);
+export const cryptoTickers = currencyTickers.concat(tokenTickers);
+export const allTickers = currencyTickers
+  .concat(fiatTickers)
+  .concat(tokenTickers);
 
 export const getFiatOrCurrency = (ticker: string): Currency => {
   const res = all.find(o => ticker === o.ticker);
@@ -79,3 +86,21 @@ const twoDigits = (n: number) => (n > 9 ? `${n}` : `0${n}`);
 
 export const formatDay = (d: Date) =>
   `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
+
+export const formatHour = (d: Date) =>
+  `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(
+    d.getDate()
+  )}T${twoDigits(d.getHours())}`;
+
+const formats = {
+  daily: formatDay,
+  hourly: formatHour
+};
+
+export const granularityMs = {
+  daily: 24 * 60 * 60 * 1000,
+  hourly: 60 * 60 * 1000
+};
+
+export const formatTime = (d: Date, granularity: Granularity) =>
+  formats[granularity](d);

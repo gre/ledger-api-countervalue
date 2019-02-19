@@ -7,7 +7,7 @@ import {
   pullLiveRates,
   getDailyMarketCapCoins
 } from "./cache";
-import { pullLiveRatesError, pullLiveRatesEnd, log, logError } from "./logger";
+import { pullLiveRatesError, pullLiveRatesEnd, logError } from "./logger";
 import { recurrentJob } from "./utils";
 
 const rebootTimeIfError = 60 * 1000;

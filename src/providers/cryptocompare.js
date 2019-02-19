@@ -5,7 +5,7 @@ import io from "socket.io-client";
 import axios from "axios";
 import { supportTicker, pairExchange, pairExchangeFromId } from "../utils";
 import { logAPI, logAPIError } from "../logger";
-import type { Provider } from "../types";
+import type { Provider, Granularity } from "../types";
 
 function init() {}
 
@@ -36,8 +36,9 @@ const get = async (url: string, opts?: *) => {
   }
 };
 
-type HistodayResponse = {
+type HistoResponse = {
   Response: string,
+  Message: string,
   Type: number,
   Aggregated: number,
   TimeTo: number,
@@ -63,9 +64,21 @@ type AllExchangesResponse = {
   }
 };
 
-const fetchHistodaysSeries = async (id: string, limit: number = 3560) => {
+const granMap = {
+  daily: "histoday",
+  hourly: "histohour"
+};
+
+const fetchHistoSeries = async (
+  id: string,
+  granularity: Granularity,
+  limit: number = 2000
+) => {
   const { from, to, exchange } = pairExchangeFromId(id);
-  const r: HistodayResponse = await get("/data/histoday", {
+
+  // NB pagination is not implemented but basically need to loop with toTs parameter
+
+  const r: HistoResponse = await get("/data/" + granMap[granularity], {
     params: {
       fsym: from,
       tsym: to,
@@ -74,6 +87,9 @@ const fetchHistodaysSeries = async (id: string, limit: number = 3560) => {
       limit
     }
   });
+  if (r.Response === "Error") {
+    throw new Error(r.Message);
+  }
   if (r.ConversionType.type !== "direct") {
     throw new Error("CryptoCompare could not find a direct conversion");
   }
@@ -174,7 +190,7 @@ const subscribePriceUpdate = exchangePairs =>
 
 const provider: Provider = {
   init,
-  fetchHistodaysSeries,
+  fetchHistoSeries,
   fetchExchanges,
   fetchAvailablePairExchanges,
   subscribePriceUpdate
