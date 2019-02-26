@@ -30,7 +30,12 @@ import {
   promiseThrottle,
   granularityMs
 } from "./utils";
-import { failRefreshingData, pullLiveRatesDebugMessage, log } from "./logger";
+import {
+  failRefreshingData,
+  failSyncStats,
+  pullLiveRatesDebugMessage,
+  log
+} from "./logger";
 
 const provider = getCurrentProvider();
 provider.init();
@@ -88,6 +93,71 @@ const MINIMAL_DAYS_TO_CONSIDER_EXCHANGE = Math.min(
 // a high order of volatility is extreme and tells something is wrong with data
 const MAXIMUM_RATIO_EXTREME_VARIATION = 1000;
 
+const syncPairStats = async (
+  pairExchangeId: string,
+  histoDays: Histo,
+  stats: Object = {}
+) => {
+  const now = new Date();
+  const nowT = Date.now();
+
+  const pairExchangeData = pairExchangeFromId(pairExchangeId);
+  if (!pairExchangeData) return;
+  const from = getFiatOrCurrency(pairExchangeData.from);
+  const to = getFiatOrCurrency(pairExchangeData.to);
+  if (!from || !to) return;
+
+  let oldestDayAgo = 0;
+
+  const granMs = granularityMs.daily;
+
+  const days = Object.keys(histoDays)
+    .filter(k => k !== "latest")
+    .map(k => new Date(k));
+
+  if (days.length === 0) {
+    // in this case, we do nothing because there is probably no data yet!
+    return;
+  }
+
+  oldestDayAgo = Math.floor((now - Math.min(...days)) / granMs);
+
+  let minimum = histoDays.latest || Infinity;
+  let maximum = histoDays.latest || 0;
+  let historyCount: number = "latest" in histoDays ? 1 : 0;
+  for (let t = nowT - 30 * granMs; t < nowT - granMs; t += granMs) {
+    const key = formatTime(new Date(t), "daily");
+    const value = histoDays[key];
+    if (key in histoDays && value > 0) {
+      historyCount++;
+      minimum = Math.min(minimum, histoDays[key]);
+      maximum = Math.max(maximum, histoDays[key]);
+    }
+  }
+
+  const minMaxRatio = maximum / minimum;
+  const invalidRatio =
+    minMaxRatio <= 0 || !isFinite(minMaxRatio) || isNaN(minMaxRatio);
+
+  if (!invalidRatio && minMaxRatio >= MAXIMUM_RATIO_EXTREME_VARIATION) {
+    log("ExtremeRatioFound: " + minMaxRatio + " on " + pairExchangeId);
+  }
+
+  // We assume an exchange valid if it have enough days data AND there is no invalid datapoints
+  const hasHistoryFor30LastDays =
+    historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE &&
+    !invalidRatio &&
+    minMaxRatio < MAXIMUM_RATIO_EXTREME_VARIATION;
+
+  const hasHistoryFor1Year = oldestDayAgo > 365;
+
+  stats.oldestDayAgo = oldestDayAgo;
+  stats.hasHistoryFor30LastDays = hasHistoryFor30LastDays;
+  stats.hasHistoryFor1Year = hasHistoryFor1Year;
+
+  await db.updatePairExchangeStats(pairExchangeId, stats);
+};
+
 const fetchHisto = async (
   pairExchangeId: string,
   granularity: Granularity
@@ -127,47 +197,13 @@ const fetchHisto = async (
       history[1] && new Date(history[1].time) > new Date(nowT - 2 * granMs)
         ? history[1].volume
         : 0;
-
-    let minimum = histo.latest || Infinity;
-    let maximum = histo.latest || 0;
-    let historyCount: number = "latest" in histo ? 1 : 0;
-    for (let t = nowT - 30 * granMs; t < nowT - granMs; t += granMs) {
-      const key = formatTime(new Date(t), granularity);
-      const value = histo[key];
-      if (key in histo && value > 0) {
-        historyCount++;
-        minimum = Math.min(minimum, histo[key]);
-        maximum = Math.max(maximum, histo[key]);
-      }
-    }
-
-    const minMaxRatio = maximum / minimum;
-    const invalidRatio =
-      minMaxRatio <= 0 || !isFinite(minMaxRatio) || isNaN(minMaxRatio);
-
-    if (!invalidRatio && minMaxRatio >= MAXIMUM_RATIO_EXTREME_VARIATION) {
-      log("ExtremeRatioFound: " + minMaxRatio + " on " + pairExchangeId);
-    }
-
-    // We assume an exchange valid if it have enough days data AND there is no invalid datapoints
-    const hasHistoryFor30LastDays =
-      historyCount >= MINIMAL_DAYS_TO_CONSIDER_EXCHANGE &&
-      !invalidRatio &&
-      minMaxRatio < MAXIMUM_RATIO_EXTREME_VARIATION;
-
-    const hasHistoryFor1Year = oldestDayAgo > 365;
-
     stats.yesterdayVolume = yesterdayVolume;
-    stats.oldestDayAgo = oldestDayAgo;
-    stats.hasHistoryFor30LastDays = hasHistoryFor30LastDays;
-    stats.hasHistoryFor1Year = hasHistoryFor1Year;
-
     if (histo.latest) {
       stats.latestDate = now;
     }
   }
 
-  db.updatePairExchangeStats(pairExchangeId, stats);
+  syncPairStats(pairExchangeId, histo, stats);
   return histo;
 };
 
@@ -370,5 +406,18 @@ export const prefetchAllPairExchanges = async () => {
     }
   } catch (e) {
     failRefreshingData(e, "all pairExchanges");
+  }
+};
+
+export const syncAllPairExchangeStats = async () => {
+  try {
+    const pairExchanges = await db.queryPairExchanges();
+
+    for (const pairExchange of pairExchanges) {
+      await syncPairStats(pairExchange.id, pairExchange.histo_daily);
+      await delay(1000);
+    }
+  } catch (e) {
+    failSyncStats(e);
   }
 };

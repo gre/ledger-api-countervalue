@@ -3,6 +3,7 @@
 import "./nodeCrashOnUncaught";
 import { getCurrentDatabase } from "./db";
 import {
+  syncAllPairExchangeStats,
   prefetchAllPairExchanges,
   pullLiveRates,
   getDailyMarketCapCoins
@@ -44,4 +45,6 @@ getCurrentDatabase()
     if (!process.env.DISABLE_PREFETCH) {
       recurrentJob(prefetchAllPairExchanges, 4 * 60 * 60 * 1000);
     }
+
+    recurrentJob(syncAllPairExchangeStats, 24 * 60 * 60 * 1000);
   });
