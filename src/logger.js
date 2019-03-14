@@ -85,3 +85,6 @@ export const pullLiveRatesEnd = () => console.warn(now() + " pullLiveRatesEnd");
 
 export const failRefreshingData = (err: *, id: string) =>
   console.error(`${now()} FAIL REFRESH ${id}: ${conciseHttpError(err)}`);
+
+export const failSyncStats = (err: *) =>
+  console.error(`${now()} FAIL sync stats: ${conciseHttpError(err)}`);
