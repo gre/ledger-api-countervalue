@@ -113,7 +113,7 @@ const syncPairStats = async (
 
   const days = Object.keys(histoDays)
     .filter(k => k !== "latest")
-    .map(k => new Date(k));
+    .map(k => new Date(k).getTime());
 
   if (days.length === 0) {
     // in this case, we do nothing because there is probably no data yet!
@@ -201,9 +201,9 @@ const fetchHisto = async (
     if (histo.latest) {
       stats.latestDate = now;
     }
-  }
 
-  syncPairStats(pairExchangeId, histo, stats);
+    syncPairStats(pairExchangeId, histo, stats);
+  }
   return histo;
 };
 
