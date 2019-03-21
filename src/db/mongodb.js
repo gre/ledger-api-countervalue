@@ -232,12 +232,12 @@ async function queryPairExchangesByPair(pair, opts = {}) {
   return docs;
 }
 
-async function queryPairExchanges() {
+async function queryPairExchangeIds() {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const docs = await promisify(coll.find(), "toArray");
-  return docs;
+  const docs = await promisify(coll.find({}).project({ id: 1 }), "toArray");
+  return docs.map(d => d.id);
 }
 
 const queryPairExchangeById = async id => {
@@ -267,7 +267,7 @@ const database: Database = {
   updatePairExchangeStats,
   updateMarketCapCoins,
   queryExchanges,
-  queryPairExchanges,
+  queryPairExchangeIds,
   queryPairExchangesByPairs,
   queryPairExchangesByPair,
   queryPairExchangeById,

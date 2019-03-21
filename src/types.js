@@ -137,7 +137,7 @@ export type Database = {
 
   queryExchanges: () => Promise<DB_Exchange[]>,
 
-  queryPairExchanges: () => Promise<DB_PairExchangeData[]>,
+  queryPairExchangeIds: () => Promise<string[]>,
 
   queryPairExchangesByPairs: (pairs: Pair[]) => Promise<DB_PairExchangeData[]>,
 
