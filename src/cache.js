@@ -411,9 +411,12 @@ export const prefetchAllPairExchanges = async () => {
 
 export const syncAllPairExchangeStats = async () => {
   try {
-    const pairExchanges = await db.queryPairExchanges();
-    for (const pairExchange of pairExchanges) {
-      await syncPairStats(pairExchange.id, pairExchange.histo_daily);
+    const pairExchanges = await db.queryPairExchangeIds();
+    for (const id of pairExchanges) {
+      const { histo_daily } = await db.queryPairExchangeById(id, {
+        histo_daily: 1
+      });
+      await syncPairStats(id, histo_daily);
     }
   } catch (e) {
     failSyncStats(e);

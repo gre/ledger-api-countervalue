@@ -35,7 +35,7 @@ function endpoint<In, Out>(validateInput: mixed => In, f: In => Promise<Out>) {
       )
       .catch(error => {
         logEndpointError(req, error);
-        res.status(400).send(error.message);
+        res.status(400).send({ message: String(error.message) });
       });
   };
 }
