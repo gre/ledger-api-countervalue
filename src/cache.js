@@ -43,7 +43,6 @@ provider.init();
 const db = getCurrentDatabase();
 
 const throttles = {
-  daily: 24 * 60 * 60 * 1000,
   fetchPairExchanges: 60 * 60 * 1000,
   fetchExchanges: 60 * 60 * 1000,
   fetchHisto: 15 * 60 * 1000,
@@ -418,7 +417,6 @@ export const syncAllPairExchangeStats = async () => {
         histo_daily: 1
       });
       await syncPairStats(id, histo_daily);
-      await delay(throttles.daily / pairExchanges.length);
     }
   } catch (e) {
     failSyncStats(e);
