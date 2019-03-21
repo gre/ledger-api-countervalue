@@ -240,11 +240,11 @@ async function queryPairExchangeIds() {
   return docs.map(d => d.id);
 }
 
-const queryPairExchangeById = async id => {
+const queryPairExchangeById = async (id, projection) => {
   const client = await getDB();
   const db = client.db();
   const histodaysCol = db.collection("pairExchanges");
-  const doc = await promisify(histodaysCol, "findOne", { id });
+  const doc = await promisify(histodaysCol, "findOne", { id }, { projection });
   return doc;
 };
 

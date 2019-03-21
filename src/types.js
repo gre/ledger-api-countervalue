@@ -147,7 +147,8 @@ export type Database = {
   ) => Promise<DB_PairExchangeData[]>,
 
   queryPairExchangeById: (
-    pairExchangeId: string
+    pairExchangeId: string,
+    project?: Object
   ) => Promise<DB_PairExchangeData>,
 
   queryMarketCapCoinsForDay: (day: string) => Promise<?(string[])>
