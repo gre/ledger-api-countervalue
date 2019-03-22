@@ -89,7 +89,7 @@ async function statusDB() {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const count = await promisify(coll, "countDocuments");
+  const { count } = await promisify(coll, "stats");
   if (count === 0) throw new Error("database is empty");
 }
 
