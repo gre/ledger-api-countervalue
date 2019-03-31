@@ -41,7 +41,6 @@ const init = async () => {
     },
     { unique: true }
   );
-  await promisify(db.collection("marketcap_coins"), "remove");
   await promisify(
     db.collection("marketcap_coins"),
     "createIndex",
