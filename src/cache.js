@@ -96,7 +96,8 @@ const MAXIMUM_RATIO_EXTREME_VARIATION = 1000;
 const syncPairStats = async (
   pairExchangeId: string,
   histoDays: Histo,
-  stats: Object = {}
+  stats: Object = {},
+  daysGotFetched = false
 ) => {
   const now = new Date();
   const nowT = Date.now();
@@ -115,12 +116,12 @@ const syncPairStats = async (
     .filter(k => k !== "latest")
     .map(k => new Date(k).getTime());
 
-  if (days.length === 0) {
+  if (days.length === 0 && !daysGotFetched) {
     // in this case, we do nothing because there is probably no data yet!
     return;
   }
 
-  oldestDayAgo = Math.floor((now - Math.min(...days)) / granMs);
+  oldestDayAgo = Math.floor((now - Math.min(0, ...days)) / granMs);
 
   let minimum = histoDays.latest || Infinity;
   let maximum = histoDays.latest || 0;
@@ -201,8 +202,7 @@ const fetchHisto = async (
     if (histo.latest) {
       stats.latestDate = now;
     }
-
-    syncPairStats(pairExchangeId, histo, stats);
+    syncPairStats(pairExchangeId, histo, stats, true);
   }
   return histo;
 };
