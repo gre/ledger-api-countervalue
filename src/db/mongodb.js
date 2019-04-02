@@ -192,25 +192,27 @@ async function queryExchanges() {
   return docs;
 }
 
-const queryPairExchangesSortCursor = cursor =>
-  cursor.sort({
-    hasHistoryFor1Year: -1,
-    yesterdayVolume: -1
+const queryPairExchangesSort = coll =>
+  coll.sort((a, b) => {
+    const histoDiff =
+      Number(b.hasHistoryFor1Year) - Number(a.hasHistoryFor1Year);
+    if (histoDiff !== 0) return histoDiff;
+    return b.yesterdayVolume - a.yesterdayVolume;
   });
 
 async function queryPairExchangesByPairs(pairs) {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const docs = await promisify(
-    queryPairExchangesSortCursor(
+  const docs = queryPairExchangesSort(
+    await promisify(
       coll.find({
         from_to: {
           $in: pairs.map(p => p.from + "_" + p.to)
         }
-      })
-    ),
-    "toArray"
+      }),
+      "toArray"
+    )
   );
   return docs;
 }
@@ -224,9 +226,8 @@ async function queryPairExchangesByPair(pair, opts = {}) {
   if (opts.filterWithHistory) {
     query.hasHistoryFor30LastDays = true;
   }
-  const docs = await promisify(
-    queryPairExchangesSortCursor(coll.find(query)),
-    "toArray"
+  const docs = queryPairExchangesSort(
+    await promisify(coll.find(query), "toArray")
   );
   return docs;
 }
