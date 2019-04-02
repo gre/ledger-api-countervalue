@@ -146,6 +146,10 @@ app.get("/_health", (req: *, res: *) => {
     });
 });
 
+app.get("/_health/noop", (req: *, res: *) => {
+  res.status(200).send();
+});
+
 app.get("/_health/detail", (req: *, res: *) => {
   const db = getCurrentDatabase();
   Promise.all([db.statusDB(), db.getMeta()])
