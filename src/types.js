@@ -139,11 +139,21 @@ export type Database = {
 
   queryPairExchangeIds: () => Promise<string[]>,
 
-  queryPairExchangesByPairs: (pairs: Pair[]) => Promise<DB_PairExchangeData[]>,
+  queryPairExchangesByPairs: (
+    pairs: Pair[],
+    opts?: {
+      granularity?: Granularity,
+      withoutRates?: boolean
+    }
+  ) => Promise<DB_PairExchangeData[]>,
 
   queryPairExchangesByPair: (
     pair: Pair,
-    opts?: { filterWithHistory?: boolean }
+    opts?: {
+      filterWithHistory?: boolean,
+      granularity?: Granularity,
+      withoutRates?: boolean
+    }
   ) => Promise<DB_PairExchangeData[]>,
 
   queryPairExchangeById: (

@@ -263,13 +263,13 @@ const isAcceptedExchange = (exchangeId: string) =>
 const filterPairExchanges = all =>
   all.filter(o => isAcceptedExchange(o.exchange));
 
-export const getPairExchangesForPairs = async (pairs: Pair[]) => {
+export const getPairExchangesForPairs = async (pairs: Pair[], opts: *) => {
   try {
     await fetchAndCacheAvailablePairExchanges();
   } catch (e) {
     failRefreshingData(e, "getPairExchangesForPairs");
   }
-  const pairExchanges = await db.queryPairExchangesByPairs(pairs);
+  const pairExchanges = await db.queryPairExchangesByPairs(pairs, opts);
   return filterPairExchanges(pairExchanges);
 };
 
@@ -289,7 +289,8 @@ export async function getHistoRequest(
 ): Promise<HistoAPIResponse> {
   const response = {};
   const pairExchanges = await getPairExchangesForPairs(
-    pairs.map(({ from, to }) => ({ from, to }))
+    pairs.map(({ from, to }) => ({ from, to })),
+    { granularity }
   );
   for (const { from, to, exchange, after, at } of pairs) {
     const pairExchangeCandidates = pairExchanges.filter(
@@ -326,7 +327,8 @@ export const getExchanges = async (
     exchanges = await db.queryExchanges();
   }
   const pairExchanges = await getPairExchangesForPair(request.pair, {
-    filterWithHistory: true
+    filterWithHistory: true,
+    withoutRates: true
   });
   return pairExchanges.map(s => {
     const { id, name, website } = exchanges.find(e => e.id === s.exchange) || {
