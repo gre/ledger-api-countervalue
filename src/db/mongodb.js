@@ -1,6 +1,6 @@
 // @flow
 
-import type { Database } from "../types";
+import type { Database, Granularity } from "../types";
 import { promisify } from "../utils";
 
 const MongoClient = require("mongodb").MongoClient;
@@ -200,24 +200,35 @@ const queryPairExchangesSort = coll =>
     return b.yesterdayVolume - a.yesterdayVolume;
   });
 
-async function queryPairExchangesByPairs(pairs) {
+const pairExchangesProjection = ({ granularity, withoutRates }: *) => {
+  const obj = {};
+  if (granularity || withoutRates) {
+    obj.histo_hourly = 0;
+    obj.histo_daily = 0;
+    if (granularity) delete obj[`histo_${granularity}`];
+  }
+  return obj;
+};
+
+async function queryPairExchangesByPairs(pairs, opts: * = {}) {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const docs = queryPairExchangesSort(
-    await promisify(
-      coll.find({
+  const entries = await promisify(
+    coll
+      .find({
         from_to: {
           $in: pairs.map(p => p.from + "_" + p.to)
         }
-      }),
-      "toArray"
-    )
+      })
+      .project(pairExchangesProjection(opts)),
+    "toArray"
   );
+  const docs = queryPairExchangesSort(entries);
   return docs;
 }
 
-async function queryPairExchangesByPair(pair, opts = {}) {
+async function queryPairExchangesByPair(pair, opts: * = {}) {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
@@ -227,7 +238,10 @@ async function queryPairExchangesByPair(pair, opts = {}) {
     query.hasHistoryFor30LastDays = true;
   }
   const docs = queryPairExchangesSort(
-    await promisify(coll.find(query), "toArray")
+    await promisify(
+      coll.find(query).project(pairExchangesProjection(opts)),
+      "toArray"
+    )
   );
   return docs;
 }
