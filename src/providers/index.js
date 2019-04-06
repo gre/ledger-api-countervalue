@@ -2,12 +2,14 @@
 
 import coinapi from "./coinapi";
 import cryptocompare from "./cryptocompare";
+import kaiko from "./kaiko"
 
 import type { Provider } from "../types";
 
 export const providers: { [_: string]: Provider } = {
   coinapi,
-  cryptocompare
+  cryptocompare,
+  kaiko
 };
 
 export const getCurrentProvider = (): Provider => {
