@@ -6,6 +6,12 @@
 * yarn
 * mongodb
 
+## Install dependencies
+
+```
+yarn
+```
+
 ## Building for dev
 
 ```
