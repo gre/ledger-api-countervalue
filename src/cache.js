@@ -23,6 +23,7 @@ import { getCurrentProvider } from "./providers";
 import { tickersByMarketcap } from "./coinmarketcap";
 import {
   formatTime,
+  parseTime,
   pairExchangeFromId,
   getFiatOrCurrency,
   convertToCentSatRate,
@@ -199,9 +200,6 @@ const fetchHisto = async (
         ? history[1].volume
         : 0;
     stats.yesterdayVolume = yesterdayVolume;
-    if (histo.latest) {
-      stats.latestDate = now;
-    }
     syncPairStats(pairExchangeId, histo, stats, true);
   }
   return histo;
@@ -228,13 +226,38 @@ const fetchAndCacheHisto_makeThrottle = (
     const pairExchange = await db.queryPairExchangeById(id);
     if (pairExchange) {
       if (pairExchange[`historyLoadedAt_${granularity}`] === nowKey) {
-        // already loaded today
-        return pairExchange[`histo_${granularity}`];
+        // it was already loaded recently, we re-use the cache and add the latest to it.
+        return {
+          ...pairExchange[`histo_${granularity}`],
+          latest: pairExchange.latest
+        };
       }
       try {
         const history = await fetchHisto(id, granularity);
-        db.updateHisto(id, granularity, history);
-        return history;
+        let setLatest;
+        const latestDate = parseTime(nowKey, granularity);
+        if (
+          (!!history.latest &&
+            // this latest is more recent than the one sync-ed so we need to update it
+            !pairExchange.latestDate) ||
+          latestDate > pairExchange.latestDate
+        ) {
+          setLatest = {
+            latest: history.latest,
+            latestDate
+          };
+        }
+        db.updateHisto(id, granularity, history, { setLatest });
+        if (setLatest) {
+          // the new fetched history have a latest that is more recent
+          return history;
+        } else {
+          // the pairExchange.latest is the most recent
+          return {
+            ...history,
+            latest: pairExchange.latest
+          };
+        }
       } catch (e) {
         failRefreshingData(e, "fetchAndCacheHisto");
         return pairExchange[`histo_${granularity}`];

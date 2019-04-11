@@ -97,6 +97,11 @@ const formats = {
   hourly: formatHour
 };
 
+const parsers = {
+  daily: str => new Date(str),
+  hourly: str => new Date(str + ":00")
+};
+
 export const granularityMs = {
   daily: 24 * 60 * 60 * 1000,
   hourly: 60 * 60 * 1000
@@ -104,3 +109,6 @@ export const granularityMs = {
 
 export const formatTime = (d: Date, granularity: Granularity) =>
   formats[granularity](d);
+
+export const parseTime = (str: string, granularity: Granularity) =>
+  parsers[granularity](str);

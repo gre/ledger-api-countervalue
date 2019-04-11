@@ -114,20 +114,18 @@ async function updateLiveRates(all) {
   await setMeta({ lastLiveRatesSync: new Date() });
 }
 
-async function updateHisto(id, granurity, histo) {
+async function updateHisto(id, granurity, histo, { setLatest } = {}) {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  await promisify(
-    coll,
-    "updateOne",
-    { id },
-    {
-      $set: {
-        [`histo_${granurity}`]: histo
-      }
-    }
-  );
+  const $set = {
+    [`histo_${granurity}`]: histo
+  };
+  if (setLatest) {
+    $set.latest = setLatest.latest;
+    $set.latestDate = setLatest.latestDate;
+  }
+  await promisify(coll, "updateOne", { id }, { $set });
 }
 
 async function updateExchanges(exchanges) {

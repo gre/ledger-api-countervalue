@@ -110,7 +110,13 @@ export type Database = {
   updateHisto: (
     pairExchangeId: string,
     granularity: Granularity,
-    histo: Histo
+    histo: Histo,
+    options?: {
+      setLatest?: {
+        latest: number,
+        latestDate: Date
+      }
+    }
   ) => Promise<void>,
 
   updateExchanges: (DB_Exchange[]) => Promise<void>,
