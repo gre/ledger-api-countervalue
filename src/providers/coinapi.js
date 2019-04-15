@@ -248,7 +248,7 @@ const subscribePriceUpdate = () =>
         } else {
           (r: CoinAPI_TickerMessage);
           const maybePairExchange = symbolToPairExchange(r.symbol_id);
-          if (maybePairExchange) {
+          if (maybePairExchange && r.price && r.price > 0) {
             o.next({
               pairExchangeId: maybePairExchange.id,
               price: r.price
