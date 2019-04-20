@@ -1,6 +1,6 @@
 // @flow
 
-import type { Database, Granularity } from "../types";
+import type { Database } from "../types";
 import { promisify } from "../utils";
 
 const MongoClient = require("mongodb").MongoClient;
