@@ -237,6 +237,7 @@ const fetchAndCacheHisto_makeThrottle = (
         let setLatest;
         const latestDate = parseTime(nowKey, granularity);
         if (
+          !pairExchange.latest ||
           (!!history.latest &&
             // this latest is more recent than the one sync-ed so we need to update it
             !pairExchange.latestDate) ||
@@ -260,7 +261,10 @@ const fetchAndCacheHisto_makeThrottle = (
         }
       } catch (e) {
         failRefreshingData(e, "fetchAndCacheHisto");
-        return pairExchange[`histo_${granularity}`];
+        return {
+          ...pairExchange[`histo_${granularity}`],
+          latest: pairExchange.latest
+        };
       }
     }
   }, throttles.fetchHisto);
