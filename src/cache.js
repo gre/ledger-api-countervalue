@@ -188,7 +188,10 @@ const fetchHisto = async (
       oldestDayAgo
     );
     const rate = convertToCentSatRate(from, to, data.close);
-    histo[key] = rate;
+    if (rate) {
+      // rates at zero are not considered valid
+      histo[key] = rate;
+    }
   }
 
   const stats: Object = {
