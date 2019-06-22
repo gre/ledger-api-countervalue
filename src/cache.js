@@ -1,6 +1,7 @@
 // @flow
 // cache on top of coinapi & db
 
+import last from "lodash/last";
 import { of } from "rxjs/observable/of";
 import { bufferTime } from "rxjs/operators";
 import { fromPromise } from "rxjs/observable/fromPromise";
@@ -87,7 +88,7 @@ const fetchAndCacheAllExchanges = promiseThrottle(async () => {
 const MINIMAL_DAYS_TO_CONSIDER_EXCHANGE = Math.min(
   process.env.MINIMAL_DAYS_TO_CONSIDER_EXCHANGE
     ? parseInt(process.env.MINIMAL_DAYS_TO_CONSIDER_EXCHANGE, 10)
-    : 20,
+    : 28,
   30
 );
 
@@ -233,26 +234,34 @@ const fetchAndCacheHisto_makeThrottle = (
         };
       }
       try {
-        const history = await fetchHisto(id, granularity);
+        let { latest, ...history } = await fetchHisto(id, granularity);
         let setLatest;
-        const latestDate = parseTime(nowKey, granularity);
+        let latestDate = parseTime(nowKey, granularity);
+        if (!latest) {
+          const lastItemKey = last(Object.keys(history).sort());
+          if (lastItemKey) {
+            latestDate = parseTime(lastItemKey, granularity);
+            latest = history[lastItemKey];
+          }
+        }
         if (
-          !pairExchange.latest ||
-          !pairExchange.latestDate ||
-          (!!history.latest &&
-            // this latest is more recent than the one sync-ed so we need to update it
-            !pairExchange.latestDate) ||
-          latestDate > pairExchange.latestDate
+          latest &&
+          (!pairExchange.latest ||
+            !pairExchange.latestDate ||
+            latestDate > pairExchange.latestDate)
         ) {
           setLatest = {
-            latest: history.latest,
+            latest,
             latestDate
           };
         }
         db.updateHisto(id, granularity, history, { setLatest });
         if (setLatest) {
           // the new fetched history have a latest that is more recent
-          return history;
+          return {
+            ...history,
+            latest
+          };
         } else {
           // the pairExchange.latest is the most recent
           return {
