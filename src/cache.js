@@ -238,6 +238,7 @@ const fetchAndCacheHisto_makeThrottle = (
         const latestDate = parseTime(nowKey, granularity);
         if (
           !pairExchange.latest ||
+          !pairExchange.latestDate ||
           (!!history.latest &&
             // this latest is more recent than the one sync-ed so we need to update it
             !pairExchange.latestDate) ||
@@ -287,8 +288,9 @@ const blacklist: string[] = (process.env.BLACKLIST_EXCHANGES || "")
 const isAcceptedExchange = (exchangeId: string) =>
   !blacklist.includes(exchangeId.toLowerCase());
 
-const filterPairExchanges = all =>
-  all.filter(o => isAcceptedExchange(o.exchange));
+const filterPairExchanges = (
+  all: DB_PairExchangeData[]
+): DB_PairExchangeData[] => all.filter(o => isAcceptedExchange(o.exchange));
 
 export const getPairExchangesForPairs = async (pairs: Pair[], opts: *) => {
   try {

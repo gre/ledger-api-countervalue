@@ -70,6 +70,7 @@ async function setMeta(meta) {
 async function getMeta() {
   const client = await getDB();
   const db = client.db();
+  // eslint-disable-next-line no-unused-vars
   const { id, _id, ...meta } = await promisify(
     db.collection("meta"),
     "findOne",
@@ -118,7 +119,7 @@ async function updateHisto(id, granurity, histo, { setLatest } = {}) {
   const client = await getDB();
   const db = client.db();
   const coll = db.collection("pairExchanges");
-  const $set = {
+  const $set: Object = {
     [`histo_${granurity}`]: histo
   };
   if (setLatest) {
