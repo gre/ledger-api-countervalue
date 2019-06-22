@@ -9,12 +9,19 @@ import type { Provider, Granularity } from "../types";
 
 function init() {}
 
+const { CRYPTOCOMPARE_API_KEY } = process.env;
+
 const get = async (url: string, opts?: *) => {
   const beforeTime = Date.now();
+  const headers: Object = {};
+  if (CRYPTOCOMPARE_API_KEY) {
+    headers.Authorization = `Apikey ${CRYPTOCOMPARE_API_KEY}`;
+  }
   try {
     const res = await axios.get(`https://min-api.cryptocompare.com${url}`, {
       ...opts,
-      timeout: 30000
+      timeout: 30000,
+      headers
     });
     logAPI({
       api: "CryptoCompare",
