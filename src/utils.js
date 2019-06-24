@@ -42,12 +42,12 @@ export const recurrentJob = async (fn: Function, ms: number) => {
 const currencies = listCryptoCurrencies();
 const fiats = listFiatCurrencies();
 const tokens = listTokens();
-export const all = currencies.concat(fiats).concat(tokens);
-const currencyTickers = currencies.map(c => c.ticker);
-const fiatTickers = fiats.map(c => c.ticker);
-const tokenTickers = tokens.map(c => c.ticker);
-export const cryptoTickers = currencyTickers.concat(tokenTickers);
-export const allTickers = currencyTickers
+export const all: Currency[] = currencies.concat(fiats).concat(tokens);
+const currencyTickers: string[] = currencies.map(c => c.ticker);
+const fiatTickers: string[] = fiats.map(c => c.ticker);
+const tokenTickers: string[] = tokens.map(c => c.ticker);
+export const cryptoTickers: string[] = currencyTickers.concat(tokenTickers);
+export const allTickers: string[] = currencyTickers
   .concat(fiatTickers)
   .concat(tokenTickers);
 
