@@ -69,7 +69,7 @@ const KAIKO_KEY = process.env.KAIKO_KEY;
 const KAIKO_KEY_WSS = process.env.KAIKO_KEY_WSS;
 const KAIKO_REGION = process.env.KAIKO_REGION || "eu";
 const KAIKO_API_VERSION = process.env.KAIKO_API_VERSION || "v1";
-const KAIKO_WSS_VERSION = process.env.KAIKO_WSS_VERSION || "v1";
+const KAIKO_WSS_VERSION = "v2"; // Available only for v2
 const USE_KAIKO_WSS = process.env.USE_KAIKO_WSS || false;
 
 function init() {
@@ -258,183 +258,81 @@ let exchanges = [],
 let queryTimeout;
 const subscribePriceUpdate = () =>
   Observable.create(o => {
-    if (!USE_KAIKO_WSS) {
-      // Not available yet, but implemented it
-      // If we want to test we should have a handshake
-      // with an HTTP call with headers
-      // Connection: "Upgrade",
-      // Upgrade: "websocket",
-      // "Sec-WebSocket-Key": KAIKO_KEY,
-      log("Kaiko WebSocket: unavailable ...");
-
-      const queryTimeSeries = async () => {
-        // Get available exchanges
-        if (exchanges.length === 0) {
-          exchanges = await fetchExchanges().catch(err =>
-            o.error(`Failed to retrieve exchanges: ${err}`)
-          );
-
-          //Get available instrument_class
-          (await fetchAvailablePairExchanges().catch(err => {
-            o.error(`Failed to retrieve instruments: ${err}`);
-          })).map(instrument => {
-            if (!instruments[instrument.exchange_code]) {
-              instruments[instrument.exchange_code] = [];
-            }
-            // Check if we are interested into those currencies
-            if (
-              allTickers.includes(instrument.from) &&
-              allTickers.includes(instrument.to)
-            ) {
-              instruments[instrument.exchange_code].push(instrument.code);
-            }
-          });
-        }
-
-        if (exchanges.length === 0 || instruments.length === 0) {
-          o.error("Exchanges or instruments are missing");
-          return;
-        }
-        // Update tickers & exchange
-        let exchange = exchanges[currentExchange];
-        if (currentInstrument === instruments[exchange].length - 1) {
-          currentExchange++;
-          currentInstrument = 0;
-        } else {
-          currentInstrument++;
-        }
-        currentExchange %= exchanges.length;
-        exchange = exchanges[currentExchange];
-        const [from, to] = instruments[exchange][currentInstrument].split("-");
-        const symbolExchanged = `${exchange.id}_${from}_${to}`;
-        const withExtendedInfos = true;
-        const fetchedPrices = await fetchPrices(
-          symbolExchanged,
-          "hourly",
-          1000,
-          withExtendedInfos
-        ).catch(e => {
-          clearTimeout(queryTimeout);
-          o.error(e);
-          return;
-        });
-
-        if (fetchedPrices && fetchedPrices.length > 0) {
-          // Call next Observable
-          const messageToNext = prices => {
-            const symbol = {
-              exchange: prices.exchange,
-              code: prices.code
-            };
-            const result = [];
-            for (const price of prices.prices) {
-              const maybePairExchange = symbolToPairExchange(symbol);
-              if (maybePairExchange) {
-                result.push({
-                  pairExchangeId: maybePairExchange.id,
-                  price: price.price
-                });
-              }
-            }
-            return result;
-          };
-          o.next(messageToNext(fetchedPrices));
-        }
-        queryTimeout = setTimeout(queryTimeSeries, 2000);
-      };
-
-      queryTimeSeries().catch(err => {
-        throw new Error(`Failed to query Time series: ${err}`);
-      });
-      return;
-    } else {
-      // This is the implementation of Kaiko's websocket
-      // once, the feature ready we can uncomment and use it
-
-      log("Kaiko WebSocket: create (total=" + websocketTotal + ")");
-      let done = false;
-      if (websocketTotal >= MAX_WEBSOCKET) {
-        log("Kaiko WebSocket: too many WebSocket opened. this should not happen");
-        process.exit(1);
-      }
-      websocketTotal++;
-      const wssUrl = `wss://${KAIKO_REGION}-beta.market-ws.kaiko.io/${KAIKO_WSS_VERSION}`;
-      const ws = new WebSocket(
-        wssUrl,
-        ["api_key", KAIKO_KEY_WSS]
-      );
-      ws.on("open", () => {
-        if (done) {
-          try {
-            ws.close();
-          } catch (e) {
-            logError("failed to close WebSocket", e);
-          }
-          return;
-        }
-        log("Kaiko WebSocket: open");
-
-        // No other choice than using wildcards here, otherwise using same connection overwrites subscription
-        const message = {
-          "command": "subscribe",
-          "args": {
-            "subscriptions": [
-              {
-                //"Sec-WebSocket-Key": `${KAIKO_KEY_WSS}`,
-                "pattern": "*:spot:*", // <exchange>:<instrument_class>:<instrument>
-                "topic": "trades",
-                "data_version": `${KAIKO_WSS_VERSION}`
-              }
-            ]
-          }
-        }
-        ws.send(
-          JSON.stringify(message)
-        );
-      });
-      ws.on("message", data => {
-        if (done) return;
-        const r = JSON.parse(data);
-        if (r && typeof r === "object") {
-          if (r.type === "error") {
-            o.error(r.message);
-            ws.close();
-          } else {
-            if (r.event === "update") {
-              const symbol = {
-                exchange: r.payload.subscription.exchange,
-                code: r.payload.subscription.instrument
-              };
-              const maybePairExchange = symbolToPairExchange(symbol);
-              if (maybePairExchange) {
-                o.next({
-                  pairExchangeId: maybePairExchange.id,
-                  price: r.payload.data.price
-                });
-              }
-            }
-          }
-        }
-      });
-      ws.on("close", () => {
-        log("Kaiko WebSocket: close");
-        done = true;
-        o.complete();
-        websocketTotal--;
-      });
-
-      function unsubscribe() {
-        log("Kaiko WebSocket: unsubscribe");
-        done = true;
+    log("Kaiko WebSocket: create (total=" + websocketTotal + ")");
+    let done = false;
+    if (websocketTotal >= MAX_WEBSOCKET) {
+      log("Kaiko WebSocket: too many WebSocket opened. this should not happen");
+      process.exit(1);
+    }
+    websocketTotal++;
+    const wssUrl = `wss://${KAIKO_REGION}.market-ws.kaiko.io/${KAIKO_WSS_VERSION}/rpc`;
+    const ws = new WebSocket(wssUrl, ["api_key", KAIKO_KEY_WSS]);
+    ws.on("open", () => {
+      if (done) {
         try {
           ws.close();
         } catch (e) {
           logError("failed to close WebSocket", e);
         }
+        return;
       }
+      log("Kaiko WebSocket: open");
 
-      return { unsubscribe };
+      // No other choice than using wildcards here, otherwise using same connection overwrites subscription
+      const message = {
+        command: "subscribe",
+        args: {
+          subscriptions: {
+            pattern: "*:spot:*", // <exchange>:<instrument_class>:<instrument>
+            topic: "trades",
+            data_version: "latest"
+          }
+        }
+      };
+      ws.send(JSON.stringify(message));
+    });
+    ws.on("message", data => {
+      if (done) return;
+      const r = JSON.parse(data);
+      if (r && typeof r === "object") {
+        if (r.event === "error") {
+          o.error(r.payload);
+          ws.close();
+        } else {
+          if (r.event === "update") {
+            const symbol = {
+              exchange: r.payload.subscription.exchange,
+              code: r.payload.subscription.instrument
+            };
+            const maybePairExchange = symbolToPairExchange(symbol);
+            if (maybePairExchange) {
+              o.next({
+                pairExchangeId: maybePairExchange.id,
+                price: r.payload.data[0].price
+              });
+            }
+          }
+        }
+      }
+    });
+    ws.on("close", () => {
+      log("Kaiko WebSocket: close");
+      done = true;
+      o.complete();
+      websocketTotal--;
+    });
+
+    function unsubscribe() {
+      log("Kaiko WebSocket: unsubscribe");
+      done = true;
+      try {
+        ws.close();
+      } catch (e) {
+        logError("failed to close WebSocket", e);
+      }
     }
+
+    return { unsubscribe };
   });
 
 const provider: Provider = {
