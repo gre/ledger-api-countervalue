@@ -372,7 +372,7 @@ export const getExchanges = async (
     withoutRates: true
   });
   return pairExchanges.map(s => {
-    const { id, name, website } = exchanges.find(e => e.id === s.exchange) || {
+    const { id, name, website } = exchanges.find(e => e.id.toLowerCase() === s.exchange.toLowerCase()) || {
       id: s.exchange,
       name: s.exchange,
       website: null
