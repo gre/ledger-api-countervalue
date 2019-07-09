@@ -60,6 +60,27 @@ function symbolToPairExchange(symbol: Kaiko_Exchange_Symbol): ?PairExchange {
   );
 }
 
+function symbolToExtendedPairExchange(symbol: string): string {
+  const tmpSymbolExchange = symbol.toUpperCase().split("/");
+  if (
+    tmpSymbolExchange.length !== 3 ||
+    tmpSymbolExchange[2].split("-").length !== 2
+  ) {
+    throw new Error(
+      `Expecting "symbolExchange" of format : <exchange>/spot/<from>-<to>`
+    );
+  }
+  const [exchange, from, to] = [
+    tmpSymbolExchange[0],
+    ...tmpSymbolExchange[2].split("-")
+  ];
+  return {
+    exchange,
+    from,
+    to
+  };
+}
+
 function pairExchangeIdToSymbol(pairExchangeId: string): string {
   const { from, to, exchange } = pairExchangeFromId(pairExchangeId);
   return `${exchange}/spot/${from}-${to}`.toLowerCase();
@@ -124,11 +145,11 @@ const fetchHistoSeries = async (
   extendedInfos: boolean = false
 ) => {
   const interval = granMap[granularity];
-  const periodMs = granularityMs[granularity];
+  const periodSeconds = granularityMs[granularity] / 1000;
 
-  const symbolEchange = pairExchangeIdToSymbol(id);
+  const symbolExchange = pairExchangeIdToSymbol(id);
   let points: Kaiko_Timeseries[] = (await get(
-    `/${KAIKO_API_VERSION}/data/trades.${KAIKO_API_VERSION}/exchanges/${symbolEchange}/aggregations/ohlcv/recent`,
+    `/${KAIKO_API_VERSION}/data/trades.${KAIKO_API_VERSION}/exchanges/${symbolExchange}/aggregations/ohlcv/recent`,
     {
       params: {
         interval,
@@ -146,10 +167,10 @@ const fetchHistoSeries = async (
         points[points.length - 1].timestamp
       ).toISOString();
       const start_time = new Date(
-        new Date(end_time) - periodMs * limit
+        points[points.length - 1].timestamp - periodSeconds * limit
       ).toISOString();
       result = (await get(
-        `/${KAIKO_API_VERSION}/data/trades.${KAIKO_API_VERSION}/exchanges/${symbolEchange}/aggregations/ohlcv`,
+        `/${KAIKO_API_VERSION}/data/trades.${KAIKO_API_VERSION}/exchanges/${symbolExchange}/aggregations/ohlcv`,
         {
           params: {
             interval,
@@ -174,7 +195,7 @@ const fetchHistoSeries = async (
     close: d.close,
     volume: d.volume
   }));
-  const [exchange, from, to] = symbolEchange.split("_");
+  const { exchange, from, to } = symbolToExtendedPairExchange(symbolExchange);
   return extendedInfos
     ? { exchange, code: [from, to].join("-"), timeSeries }
     : timeSeries;
@@ -186,9 +207,9 @@ const fetchPrices = async (
   extendedInfos: boolean = false
 ) => {
   const interval = granMap[granularity];
-  const symbolEchange = pairExchangeIdToSymbol(id);
+  const symbolExchange = pairExchangeIdToSymbol(id);
   let points: Kaiko_Timeseries[] = (await get(
-    `/${KAIKO_API_VERSION}/data/trades.${KAIKO_API_VERSION}/exchanges/${symbolEchange}/aggregations/vwap`,
+    `/${KAIKO_API_VERSION}/data/trades.${KAIKO_API_VERSION}/exchanges/${symbolExchange}/aggregations/vwap`,
     {
       params: {
         interval
@@ -200,7 +221,7 @@ const fetchPrices = async (
     time: new Date(d.timestamp),
     price: d.price
   }));
-  const [exchange, from, to] = symbolEchange.split("_");
+  const { exchange, from, to } = symbolToExtendedPairExchange(symbolExchange);
   return extendedInfos
     ? { exchange, code: [from, to].join("-"), prices }
     : prices;
@@ -211,7 +232,7 @@ const fetchExchanges = async () => {
     useRefDataEndpoint: true
   })).data;
   const exchanges = list.map(e => ({
-    id: e.code,
+    id: e.code.toUpperCase(),
     name: e.name,
     website: ""
   }));
@@ -239,8 +260,8 @@ const fetchAvailablePairExchanges = async () => {
     });
     if (
       pairExchange &&
-      supportTicker(pairExchange.from.toUpperCase()) &&
-      supportTicker(pairExchange.to.toUpperCase())
+      supportTicker(pairExchange.from) &&
+      supportTicker(pairExchange.to)
     ) {
       pairExchanges.push(pairExchange);
     }
