@@ -13,17 +13,18 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
-    "@ledgerhq/live-common": "6.11.2",
+    "@ledgerhq/live-common": "7.9.0",
     "axios": "^0.19.0",
     "babel-cli": "^6.26.0",
     "babel-eslint": "^8.2.6",
     "babel-plugin-transform-flow-strip-types": "^6.22.0",
     "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-polyfill": "^6.26.0",
     "babel-preset-env": "^1.7.0",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "express": "^4.17.1",
-    "lodash": "^4.17.10",
+    "lodash": "^4.17.15",
     "mongodb": "^3.1.4",
     "rxjs": "^6.5.2",
     "rxjs-compat": "^6.5.2",
@@ -35,7 +36,7 @@
     "eslint": "^4.19.1",
     "eslint-config-prettier": "^3.0.1",
     "eslint-plugin-flowtype": "^2.50.0",
-    "flow-bin": "~0.101.1",
+    "flow-bin": "~0.104.0",
     "flow-typed": "^2.5.2"
   }
 }

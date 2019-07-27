@@ -1,5 +1,6 @@
 // @flow
 // Synchronize the local database with distant service
+import "babel-polyfill";
 import "./nodeCrashOnUncaught";
 import { getCurrentDatabase } from "./db";
 import {
