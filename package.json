@@ -9,7 +9,7 @@
     "flow-typed": "flow-typed install -s"
   },
   "name": "ledger-api-countervalue-nodejs",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "license": "MIT",
   "private": true,
   "dependencies": {
