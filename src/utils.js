@@ -1,10 +1,12 @@
 // @flow
 
+import uniq from "lodash/uniq";
 import type { PairExchange, Granularity } from "./types";
 import {
   listCryptoCurrencies,
   listFiatCurrencies,
-  listTokens
+  listTokens,
+  findCurrencyByTicker
 } from "@ledgerhq/live-common/lib/currencies";
 import "@ledgerhq/live-common/lib/load/tokens/ethereum/erc20";
 import type { Currency } from "@ledgerhq/live-common/lib/types";
@@ -45,14 +47,14 @@ const tokens = listTokens();
 export const all: Currency[] = currencies.concat(fiats).concat(tokens);
 const currencyTickers: string[] = currencies.map(c => c.ticker);
 const fiatTickers: string[] = fiats.map(c => c.ticker);
-const tokenTickers: string[] = tokens.map(c => c.ticker);
+const tokenTickers: string[] = uniq(tokens.map(c => c.ticker));
 export const cryptoTickers: string[] = currencyTickers.concat(tokenTickers);
 export const allTickers: string[] = currencyTickers
   .concat(fiatTickers)
   .concat(tokenTickers);
 
 export const getFiatOrCurrency = (ticker: string): Currency => {
-  const res = all.find(o => ticker === o.ticker);
+  const res = findCurrencyByTicker(ticker);
   if (!res) {
     throw new Error(
       "ticker not found " + ticker + ". should filter with allTickers first"

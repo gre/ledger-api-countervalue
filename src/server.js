@@ -1,6 +1,7 @@
 // @flow
 // Implement the HTTP server API
 
+import "babel-polyfill";
 import "./nodeCrashOnUncaught";
 import express from "express";
 import cors from "cors";
